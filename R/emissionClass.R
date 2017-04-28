@@ -1,6 +1,3 @@
-library(R6)
-source("parameterObjectClass.R")
-
 ###
 ## Create generic emission class
 ###
@@ -17,12 +14,12 @@ Emission$set("public","initialize",function(data,nstates,params=list(),lowerBoun
                                               invariants=list(),chainSpecificParameters=NULL){
     ## Set number of states
     self$nstates=nstates
-    
-    ## First check validity for items with generic validity checkers 
+
+    ## First check validity for items with generic validity checkers
     self$checkDataValidity(data)
     self$data=data
     self$checkParamConstraints(params,lowerBound,upperBound,fixed)
-    
+
     ## Invariant check with no dependencies
     if(is.list(invariants)){
         self$invariants=invariants
@@ -32,13 +29,13 @@ Emission$set("public","initialize",function(data,nstates,params=list(),lowerBoun
     self$checkParamValidity(params)
     ## Set parameter vector
     self$setParamVector(params,chainSpecificParameters)
-    
+
     ## Reshape parameter constraints to vectors and set self$lowerBound, self$upperBound, self$fixed, must be after params are set
     self$setParamConstraints(params,lowerBound,upperBound,fixed)
 
     ## Now perform additional checks for invariant validity
     self$checkInvariantValidity(invariants)
-    
+
     self$checkEmissionValidity()
     self$updateEmissionProbabilities()
 })
@@ -63,7 +60,7 @@ Emission$set("public","checkEmissionValidity", function(){
     if (length(errors) == 0) TRUE else errors
 })
 
-## A function that is used to check data structure and content validity 
+## A function that is used to check data structure and content validity
 Emission$set("public","checkDataValidity", function(data){
     errors=character()
     ## Check that the data is formated correctly, critical errors that will stop execution immediately
@@ -85,5 +82,5 @@ Emission$set("public","checkDataValidity", function(data){
 
 ## Update log emission probability
 Emission$set("public","updateEmissionProbabilities", function(){
-        stop("Must implement a updateEmissionProbabilities function.")    
+        stop("Must implement a updateEmissionProbabilities function.")
 })

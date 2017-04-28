@@ -1,12 +1,13 @@
-library(doParallel)
-library(optimx)
-library(Rcpp)
-library(ggplot2)
-## library(rphast)
-sourceCpp("../src/HMMClass.cpp")
-## library(microbenchmark)
-
 HMM <- R6Class("HMM",public=list(emission="Emission",transition="Transition",logPrior="numeric",alphaTable="list",betaTable="list",logLiklihood="numeric"))
+
+#' checkHMMValidity
+#'
+#' This function allows you to express your love of cats.
+#' @param love Do you love cats? Defaults to TRUE.
+#' @keywords cats
+#' @export
+#' @examples
+#' cat_function()
 
 ## Check validity of HMM object
 HMM$set("public","checkHMMValidity",function(){
@@ -63,7 +64,7 @@ logSumExpV <- function(x,byRow=FALSE){
 ## Implement method for the forward algorithm
 HMM$set("public","forwardAlgorithm", function(ncores=1){
     self$alphaTable=mclapply(self$emission$emissionLogProb,function(x){
-        return(forwardAlgorithmCpp(x,self$transition$transitionLogProb,self$logPrior))        
+        return(forwardAlgorithmCpp(x,self$transition$transitionLogProb,self$logPrior))
     },mc.cores=ncores)
 },overwrite=TRUE)
 
@@ -82,14 +83,14 @@ HMM$set("public","computeViterbiPath",function(){
         vPath[length(vPath)] = which.max(x[length(vPath),])
         if(nrow(x)>1){
             for(j in (nrow(x)-1):1){
-                vPath[j]=which.max(x[j,]+self$transition$transitionLogProb[,vPath[j+1]])                  
+                vPath[j]=which.max(x[j,]+self$transition$transitionLogProb[,vPath[j+1]])
             }
         }
         return(vPath)
     })
     return(vPathList)
 })
-        
+
 ## Method to compute liklihood from alpha table
 HMM$set("public","computeLogLiklihood",function(){
     self$logLiklihood=sum(unlist(lapply(self$alphaTable,function(x) logSumExp(x[nrow(x),])),use.names=FALSE))
@@ -157,7 +158,7 @@ setMethod("plot.hmm",signature=c(hmm="ANY",viterbi="ANY",marginal="ANY",truePath
                       x[,index:=1:nrow(x)]
                       melt(x[index>=start & index <=end],id.vars="index")
                   }),idcol=TRUE)
-                  
+
                   dat[,variable:=NULL]
                   dat[,type:="Raw data"]
                   g=g+geom_point(data=dat,aes(x=index,y=value,color=.id),alpha=1/3,inherit.aes=FALSE)
@@ -173,14 +174,14 @@ setMethod("plot.hmm",signature=c(hmm="ANY",viterbi="ANY",marginal="ANY",truePath
                   g=g+geom_line(data=tru,aes(x=index,y=value,linetype="True Path"),color="red",inherit.aes=FALSE)+
                       guides(linetype=guide_legend(title="Path Type"))+
                       scale_linetype_manual(values=c(3,1))
-                                
+
               }
               if(!is.null(marginal)){
                   mar=data.table(index=start:end,value=marginal[[chain]][start:end,])
                   mar=melt(mar,id.vars=c("index"))
                   mar[,variable:=gsub("value.V","class.",variable)]
                   mar[,type:="Marginal"]
-                  g=g+geom_bar(data=mar,aes(x=index,y=value,fill=variable),stat="identity",inherit.aes=FALSE)    
+                  g=g+geom_bar(data=mar,aes(x=index,y=value,fill=variable),stat="identity",inherit.aes=FALSE)
               }
               g=g+facet_wrap(~type,ncol=1,scales="free_y")+
                   theme_bw()

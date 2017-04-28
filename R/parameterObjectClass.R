@@ -1,5 +1,3 @@
-library(R6)
-library(data.table)
 
 ## @params is a vector of paramters that can be optimized
 ## @paramType is a vector of labels for the parameters that can be used to access them by name (same order as params)
@@ -87,7 +85,7 @@ parameterObject$set("public","setParamVector", function(params,chainSpecificPara
     ## Do validity check on chain specific parameters if they exist
     if(length(chainSpecificParameters)>0){
         self$checkChainSpecificParameters(params,chainSpecificParameters)
-    } 
+    }
     ## Iterate over all parameters
     ind=1
     pList=list()
@@ -109,7 +107,7 @@ parameterObject$set("public","setParamVector", function(params,chainSpecificPara
             ## Use -1 to denote non-specific parameters
             pList[[p]]=data.table(chains=-1,group=-1,start=ind,end=ind+length(params[[p]])-1)
             ind=ind+length(params[[p]])
-        }        
+        }
     }
     self$paramIndex=rbindlist(pList,idcol="paramType")
     setkeyv(self$paramIndex,cols=c("paramType","chains"))
@@ -177,7 +175,7 @@ parameterObject$set("public","getParamIndicies", function(paramType,chain=NULL){
 
 ####
 ## Functions that may be instantiated in a subclass
-#### 
+####
 
 ## Checks that parameter constraints are satisfied, for superclass emission nothing is checked
 parameterObject$set("public","checkParamValidity", function(params){
@@ -186,5 +184,5 @@ parameterObject$set("public","checkParamValidity", function(params){
 
 ## Checks that invariant constraints are satisfied, for superclass emission nothing is checked
 parameterObject$set("public","checkInvariantValidity", function(invariants){
-        warning("No validity check for invariants implemented.")    
+        warning("No validity check for invariants implemented.")
 })

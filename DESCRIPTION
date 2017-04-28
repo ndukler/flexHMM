@@ -1,11 +1,21 @@
 Package: flexHMM
 Type: Package
-Title: What the Package Does (Title Case)
+Title: flexHMM
 Version: 0.1.0
-Author: Who wrote it
-Maintainer: The package maintainer <yourself@somewhere.net>
-Description: More about what it does (maybe more than one line)
-    Use four spaces when indenting paragraphs within the Description.
+Authors@R: person("Noah", "Dukler", email = "ndukler@gmail.com",
+                  role = c("aut", "cre")) 
+Maintainer: The package maintainer <ndukler@gmail.com>
+Description: A flexible package for creating HMMs.  
 License: What license is it under?
 Encoding: UTF-8
 LazyData: true
+LinkingTo: Rcpp
+Depends:
+  R6,
+  data.table,
+  doParallel,
+  ggplot2
+Imports: 
+  Rcpp,
+  rphast
+
