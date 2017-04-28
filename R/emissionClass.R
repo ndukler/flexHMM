@@ -11,7 +11,7 @@ Emission <- R6Class("Emission",public=list(data=list(),emissionLogProb=list(),ns
 
 ## Add generic constructor for all emission type objects
 Emission$set("public","initialize",function(data,nstates,params=list(),lowerBound=list(), upperBound=list(),fixed=list(),
-                                              invariants=list(),chainSpecificParameters=NULL){
+                                              invariants=list(),chainSpecificParameters=NULL,updateProb=TRUE){
     ## Set number of states
     self$nstates=nstates
 
@@ -35,9 +35,7 @@ Emission$set("public","initialize",function(data,nstates,params=list(),lowerBoun
 
     ## Now perform additional checks for invariant validity
     self$checkInvariantValidity(invariants)
-
     self$checkEmissionValidity()
-    self$updateEmissionProbabilities()
 })
 
 ###

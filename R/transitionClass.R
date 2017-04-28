@@ -20,9 +20,7 @@ Transition$set("public","initialize",function(nstates,params=list(),lowerBound=l
 
     ## Now perform additional checks for invariant validity
     self$checkInvariantValidity(invariants)
-
     self$checkTransitionValidity()
-    self$updateTransitionProbabilities()
 })
 
 Transition$set("public","checkTransitionValidity", function(){
