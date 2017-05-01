@@ -95,7 +95,7 @@ parameterObject$set("public","setParamVector", function(params,chainSpecificPara
         if(p %in% names(chainSpecificParameters)){
             self$params=c(self$params,rep(params[[p]],length(chainSpecificParameters[[p]])))
             ## Build index for parameters
-            start=seq(ind,length(params[[p]])*length(chainSpecificParameters[[p]]),by=length(params[[p]]))
+            start=seq(ind,ind+length(params[[p]])*length(chainSpecificParameters[[p]]),by=length(params[[p]]))
             end=start+length(params[[p]])-1
             pList[[p]]=rbindlist(lapply(as.list(1:length(chainSpecificParameters[[p]])),
                      function(y){
