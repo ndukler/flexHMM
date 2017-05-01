@@ -172,6 +172,23 @@ parameterObject$set("public","getParamIndicies", function(paramType,chain=NULL){
     return(as.numeric(out))
 })
 
+###
+## Convenience functions
+###
+
+## Returns a table of parameters for the HMM object
+parameterObject$set("public","getParameterTable",function(){
+    pTab=with(self$paramIndex,data.table(paramName=rep(paramType,end-start+1),chain=rep(chains,end-start+1)))
+    pVal=numeric(nrow(pTab))
+    ind=1
+    for(i in 1:nrow(self$paramIndex)){
+        pS=self$params[self$paramIndex$start[i]:self$paramIndex$end[i]]
+        pVal[ind:(i+length(pS)-1)]=pS
+        ind=ind+length(pS)
+    }
+    pTab[,value:=pVal]
+    return(pTab)
+})
 
 ####
 ## Functions that may be instantiated in a subclass

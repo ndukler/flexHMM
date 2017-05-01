@@ -108,6 +108,11 @@ HMM$set("public","computeMarginalProb",function(){
     return(mProb)
 })
 
+## Method to compute marginal probability table
+HMM$set("public","getParameterTable",function(){
+    return(rbind(self$emission$getParameterTable()[,pType:="emission"],self$transition$getParameterTable()[,pType:="transition"]))
+})
+
 ## Function to pass to optim, that takes a set of values, and an HMM, and returns a negative log liklihood
 updateAllParams <- function(x,hmmObj,nthreads){
     if(length(x) != sum(!hmmObj$transition$fixed)+sum(!hmmObj$emission$fixed) ){
