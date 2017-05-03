@@ -64,7 +64,7 @@ logSumExpV <- function(x,byRow=FALSE){
 
 ## Implement method for the forward algorithm
 HMM$set("public","forwardAlgorithm", function(ncores=1){
-    self$alphaTable=mclapply(self$emission$emissionLogProb,function(x){
+    self$alphaTable=mclapply(self$emission$sumChainReplicates(),function(x){
         return(forwardAlgorithmCpp(x,self$transition$transitionLogProb,self$logPrior))
     },mc.cores=ncores)
 },overwrite=TRUE)
@@ -72,7 +72,7 @@ HMM$set("public","forwardAlgorithm", function(ncores=1){
 
 ## Implement method for the backward algorithm
 HMM$set("public","backwardAlgorithm",function(ncores=1){
-    self$betaTable=mclapply(self$emission$emissionLogProb,function(x){
+    self$betaTable=mclapply(self$emission$sumChainReplicates(),function(x){
         return(backwardAlgorithmCpp(x,self$transition$transitionLogProb))
     },mc.cores = ncores)
 })
