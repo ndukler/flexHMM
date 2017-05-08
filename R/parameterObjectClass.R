@@ -1,4 +1,3 @@
-
 ## @params is a vector of paramters that can be optimized
 ## @paramType is a vector of labels for the parameters that can be used to access them by name (same order as params)
 ## @fixed a vector of logical values that dertermines if a parameter is to be optimized (same order as params)
@@ -12,15 +11,15 @@
 
 
 parameterObject <- R6Class("parameterObject",public=list(params=numeric(),paramType=character(),paramIndex=data.table(),fixed=logical(),
-                                   lowerBound=numeric(),upperBound=numeric(),invariants=list()))
+                                   lowerBound=numeric(),upperBound=numeric(),invariants=list(),replicatesPerParameter=numeric(0)))
 
 parameterObject$set("public","initialize",function(data,params=list(),lowerBound=list(), upperBound=list(),fixed=list(),
-                                              invariants=list(),chainSpecificParameters=NULL){
+                                              invariants=list(),chainSpecificParameters=NULL,replicatesPerParameter=numeric(0)){
     stop("parameterObject is an abstract class.")
 })
 
 #####
-## Methods for checking constraints
+## Methods for checking settings
 #####
 
 ## Checks that parameter constraints are specified in a valid fashion
@@ -74,53 +73,110 @@ parameterObject$set("public","checkChainSpecificParameters", function(params,cha
     }
 })
 
+## A function that checks the validity of chainSpecificParameters
+parameterObject$set("public","checkReplicates", function(params,replicatesPerParameter){
+    ## Make sure there is no parameter tying specified for non-existant parameters
+    if(sum(!names(replicatesPerParameter) %in% names(params))>0){
+        stop(paste("A chainSpecificParameter was specified for the following non-existant parameters:",
+                   names(replicatesPerParameter)[!names(replicatesPerParameter) %in% names(params)]))
+    }
+})
+
 ###
-## Setter functions
+## Index building
 ###
 
-## A function that takes the list of parameters a converts it to a vector which is used to set
-## self$params and builds lookup table
-## NOTE: self$data must be set for this to be used
-parameterObject$set("public","setParamVector", function(params,chainSpecificParameters){
+## Function to build parameter index
+parameterObject$set("public","buildParamIndex", function(params,chainSpecificParameters=list(),replicatesPerParameter=character()){
     ## Do validity check on chain specific parameters if they exist
     if(length(chainSpecificParameters)>0){
         self$checkChainSpecificParameters(params,chainSpecificParameters)
     }
-    ## Iterate over all parameters
-    ind=1
-    pList=list()
-    for(p in names(params)){
-        ## If the parameter is a chain specific parameter, create multiple copies of it and
-        ## label with a .chain.indexNum suffix
-        if(p %in% names(chainSpecificParameters)){
-            self$params=c(self$params,rep(params[[p]],length(chainSpecificParameters[[p]])))
-            ## Build index for parameters
-            start=seq(ind,ind+length(params[[p]])*length(chainSpecificParameters[[p]]),by=length(params[[p]]))
-            end=start+length(params[[p]])-1
-            pList[[p]]=rbindlist(lapply(as.list(1:length(chainSpecificParameters[[p]])),
-                     function(y){
-                         data.table(chains=chainSpecificParameters[[p]][[y]],start=start[y],end=end[y])
-                     }),idcol="group")
-            ind=ind+length(params[[p]])*length(chainSpecificParameters[[p]])
-        } else {
-            self$params=c(self$params,params[[p]])
-            ## Use -1 to denote non-specific parameters
-            pList[[p]]=data.table(chains=-1,group=-1,start=ind,end=ind+length(params[[p]])-1)
-            ind=ind+length(params[[p]])
-        }
+    ## Do validity checks on replicates if they exist
+    if(length(replicatesPerParameter)>0){
+        self$checkReplicates(params,replicatesPerParameter)
     }
-    self$paramIndex=rbindlist(pList,idcol="paramType")
-    setkeyv(self$paramIndex,cols=c("paramType","chains"))
+    ## Iterate over all parameters
+    pIndList=list()
+    ind=1
+    for(p in names(params)){
+        ## Get the length of each parameter
+        p.len=length(params[[p]])
+        ## If the parameter is replicate specific get number of replicates, else 1
+        if(!is.na(replicatesPerParameter[p])){
+            rpls=1:replicatesPerParameter[p]
+        } else{
+            rpls=-1
+        }
+        ## If the parameter is chain specific get the number of chains
+        if(!is.null(chainSpecificParameters[[p]])){
+            pIndList[[p]]=rbindlist(lapply(chainSpecificParameters[[p]], function(x) data.table(chain=rep(x,each=length(rpls)),replicate=rpls)),idcol="group")
+        } else{
+            pIndList[[p]]=data.table(group=-1,chain=-1,replicate=rpls)
+        }
+        pIndList[[p]][,tmp:=as.numeric(factor(paste0(group,".",replicate)))-1]
+        ## Set start and end indicies
+        pIndList[[p]][,start:=ind+tmp*p.len]
+        pIndList[[p]][,end:=start+p.len-1]
+        ind=max(pIndList[[p]]$end)+1
+        pIndList[[p]][,tmp:=NULL]
+    }
+    self$paramIndex=rbindlist(pIndList,idcol='paramType')
+    setkeyv(self$paramIndex,cols=c("paramType","chain","replicate"))
+})
+
+###
+## Setter functions
+###
+
+parameterObject$set("public","setParamValue", function(paramType,value,chain=NULL,replicate=NULL){
+    ind=self$getParamIndicies(paramType,chain,replicate)
+    if(length(ind) %% length(value) != 0){
+        stop('The number of parameter indicies must be a multiple of the length of the value vector when setting parameter values.')
+    }
+    self$params[ind]=rep(value,length.out=length(ind))
+})
+
+parameterObject$set("public","setFixedConstraint", function(paramType,value,chain=NULL,replicate=NULL){
+    ind=self$getParamIndicies(paramType,chain,replicate)
+    if(length(ind) %% length(value) != 0){
+        stop('The number of parameter indicies must be a multiple of the length of the value vector when setting parameter values.')
+    }
+    self$fixed[ind]=rep(value,length.out=length(ind))
+})
+
+parameterObject$set("public","setUpperBoundConstraint", function(paramType,value,chain=NULL,replicate=NULL){
+    ind=self$getParamIndicies(paramType,chain,replicate)
+    if(length(ind) %% length(value) != 0){
+        stop('The number of parameter indicies must be a multiple of the length of the value vector when setting parameter values.')
+    }
+    self$upperBound[ind]=rep(value,length.out=length(ind))
+})
+
+parameterObject$set("public","setLowerBoundConstraint", function(paramType,value,chain=NULL,replicate=NULL){
+    ind=self$getParamIndicies(paramType,chain,replicate)
+    if(length(ind) %% length(value) != 0){
+        stop('The number of parameter indicies must be a multiple of the length of the value vector when setting parameter values.')
+    }
+    self$lowerBound[ind]=rep(value,length.out=length(ind))
+})
+
+## Sets entire parameter vector
+parameterObject$set("public","setParamVector", function(params){
+    self$params=numeric(max(self$paramIndex$end))
+    ## Iterate over all parameters
+    for(p in names(params)){
+        self$setParamValue(p,params[[p]])
+    }
 })
 
 ## A function that takes the list of parameter constraints and uses it to set constraint variables in self
-parameterObject$set("public","setParamConstraints", function(params,lowerBound=list(),upperBound=list(),fixed=list()){
-    self$lowerBound=numeric(length(self$params))
-    self$upperBound=numeric(length(self$params))
-    self$fixed=numeric(length(self$params))
+parameterObject$set("public","setParamConstraints", function(lowerBound=list(),upperBound=list(),fixed=list()){
+    self$lowerBound=numeric(max(self$paramIndex$end))
+    self$upperBound=numeric(max(self$paramIndex$end))
+    self$fixed=numeric(max(self$paramIndex$end))
     ## Iterate over all parameters
-    for(p in names(params)){
-        p.ind=self$getParamIndicies(p,NULL)
+    for(p in unique(self$paramIndex$paramType)){
         if(is.null(lowerBound[[p]])){
             lowerBound[[p]]=-Inf
         }
@@ -130,9 +186,9 @@ parameterObject$set("public","setParamConstraints", function(params,lowerBound=l
         if(is.null(fixed[[p]])){
             fixed[[p]]=FALSE
         }
-        self$lowerBound[p.ind]=rep(lowerBound[[p]],length.out=length(p.ind))
-        self$upperBound[p.ind]=rep(upperBound[[p]],length.out=length(p.ind))
-        self$fixed[p.ind]=rep(fixed[[p]],length.out=length(p.ind))
+        self$setLowerBoundConstraint(p,lowerBound[[p]])
+        self$setUpperBoundConstraint(p,upperBound[[p]])
+        self$setFixedConstraint(p,fixed[[p]])
     }
     self$fixed=as.logical(self$fixed)
 })
@@ -142,35 +198,65 @@ parameterObject$set("public","setParamConstraints", function(params,lowerBound=l
 ####
 ## Returns the indicies that a parameter exists in, in the parameter vector
 ## Note: Relies on the construction of the parameter vector where parameters of the same type and chain are contiguous
-parameterObject$set("public","getParamIndicies", function(paramType,chain=NULL){
+parameterObject$set("public","getParamIndicies", function(paramType,chain=NULL,replicate=NULL){
+    ## Check that the parameter type is valid
+    if(is.na(self$paramIndex[paramType]$group[1])){
+        stop(paste("Invalid query for parameter of type",paramType))
+    }
     ## If a chain was specified (but may be ignored)
     if(!is.null(chain)){
-        ## If it is a chain linked variable
-        if(nrow(self$paramIndex[paramType])>1){
-            out=as.numeric(self$paramIndex[eval(.(paramType,chain)),.(start,end)])
-            out=out[1]:out[2]
-            if(is.na(out[1])){
-                stop(paste0("Invalid chain in parameter query (",paramType,",",chain,")"))
-            }
-        } else {
-            ## If it's not a chain linked variable
-            if(!is.na(self$paramIndex[paramType]$group)){
-                out=as.numeric(self$paramIndex[paramType,.(start,end)])
-                out=out[1]:out[2]
-            } else {
-                stop(paste("Invalid query for parameter of type",paramType))
-            }
+        ## If it is not a chain specific parameter
+        if(self$paramIndex[eval(.(paramType))]$chain[1]==-1){
+            chain=-1
+        } else if(is.na(self$paramIndex[eval(.(paramType,chain))]$group[1])){
+            stop("Out of range chain query")
         }
-    } else {
-        ## If the query was just for all indicies of a given parameter type
-        if(!is.na(self$paramIndex[paramType]$group[1])){
-            out=unlist(apply(self$paramIndex[paramType,.(start,end)],1, function(x) x[1]:x[2]))
-        } else {
-            stop(paste("Invalid query for parameter of type",paramType))
+    } 
+    ## If a replicate is specified (but may be ignored)
+    if(!is.null(replicate)){
+        ## If it is not a replicate specific parameter
+        if(self$paramIndex[eval(.(paramType,chain))]$replicate[1]==-1){
+            replicate=-1
+        } else if(is.na(self$paramIndex[eval(.(paramType,chain,replicate))]$group[1])){
+            stop("Out of range replicate query")
         }
     }
+    qOut=self$paramIndex[eval(.(paramType,chain,replicate)),.(start,end)]
+    
+    out=do.call("c",foreach(z=1:nrow(qOut)) %do% {
+        return(qOut$start[z]:qOut$end[z])
+    })
     return(as.numeric(out))
 })
+
+parameterObject$set("public","getChainParameterMatrix", function(paramType,chain,replicate=NULL){
+    ## Check that the parameter type is valid
+    if(is.na(self$paramIndex[paramType]$group[1])){
+        stop(paste("Invalid query for parameter of type",paramType))
+    }
+    ## If parameter is chain specific
+    if(self$paramIndex[eval(.(paramType))]$chain[1]==-1){
+        chain=-1
+    } else if(is.na(self$paramIndex[eval(.(paramType,chain))]$group[1])){
+        stop("Out of range chain query")
+    }    
+    ## If a replicate is specified (but may be ignored)
+    if(!is.null(replicate)){
+        ## If it is not a replicate specific parameter
+        if(self$paramIndex[eval(.(paramType,chain))]$replicate[1]==-1){
+            replicate=-1
+        } else if(is.na(self$paramIndex[eval(.(paramType,chain,replicate))]$group[1])){
+            stop("Out of range replicate query")
+        }
+    }
+    qOut=self$paramIndex[eval(.(paramType,chain,replicate)),.(replicate,start,end)]
+    pMat=matrix(0,ncol=max(abs(qOut$replicate)),nrow=qOut$end[1]-qOut$start[1]+1)
+    for(z in 1:nrow(qOut)){
+        pMat[,abs(qOut$replicate[z])]=self$params[qOut$start[z]:qOut$end[z]]
+    }
+    return(pMat)
+})
+
 
 ###
 ## Convenience functions
@@ -179,7 +265,8 @@ parameterObject$set("public","getParamIndicies", function(paramType,chain=NULL){
 ## Returns a table of parameters for the HMM object
 parameterObject$set("public","getParameterTable",function(){
     pTab=foreach(i=1:nrow(self$paramIndex)) %do% {
-        with(self$paramIndex,data.table(paramName=rep(paramType[i],end[i]-start[i]+1),chain=rep(chains[i],end[i]-start[i]+1),
+        with(self$paramIndex,data.table(paramName=rep(paramType[i],end[i]-start[i]+1),chain=rep(chain[i],end[i]-start[i]+1),
+                                        replicate=rep(replicate[i],end[i]-start[i]+1),
                                         value=self$params[self$paramIndex$start[i]:self$paramIndex$end[i]]))
     }
     pTab=rbindlist(pTab)

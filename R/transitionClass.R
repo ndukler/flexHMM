@@ -12,11 +12,15 @@ Transition$set("public","initialize",function(nstates,params=list(),lowerBound=l
     } else stop("Invariants must be in a list.")
     ## Perform parameter validity check and set parameters
     self$checkParamValidity(params)
+
+    ## Build parameter index
+    self$buildParamIndex(params,chainSpecificParameters)
+    
     ## Set parameter vector
-    self$setParamVector(params,chainSpecificParameters)
+    self$setParamVector(params)
 
     ## Reshape parameter constraints to vectors and set self$lowerBound, self$upperBound, self$fixed, must be after params are set
-    self$setParamConstraints(params,lowerBound,upperBound,fixed)
+    self$setParamConstraints(lowerBound,upperBound,fixed)
 
     ## Now perform additional checks for invariant validity
     self$checkInvariantValidity(invariants)

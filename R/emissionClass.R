@@ -12,7 +12,7 @@ Emission <- R6Class("Emission",public=list(data=list(),emissionLogProb=list(),ns
 
 ## Add generic constructor for all emission type objects
 Emission$set("public","initialize",function(data,nstates,params=list(),lowerBound=list(), upperBound=list(),fixed=list(),
-                                              invariants=list(),chainSpecificParameters=NULL,chainReplicates=NULL){
+                                              invariants=list(),chainSpecificParameters=NULL,replicatesPerParameter=numeric()){
     ## Set number of states
     self$nstates=nstates
 
@@ -25,21 +25,17 @@ Emission$set("public","initialize",function(data,nstates,params=list(),lowerBoun
     if(is.list(invariants)){
         self$invariants=invariants
     } else stop("Invariants must be in a list.")
-
+   
     ## Perform parameter validity check and set parameters
     self$checkParamValidity(params)
+    
     ## Set parameter vector
-    self$setParamVector(params,chainSpecificParameters)
+    self$buildParamIndex(params,chainSpecificParameters,replicatesPerParameter)
+    self$setParamVector(params)
 
     ## Reshape parameter constraints to vectors and set self$lowerBound, self$upperBound, self$fixed, must be after params are set
-    self$setParamConstraints(params,lowerBound,upperBound,fixed)
-
-    ## Set chain replicates
-    if(!is.null(chainReplicates)){
-        self$checkChainReplicateValidity(data,chainReplicates)
-        self$chainReplicates=chainReplicates
-    }
-    
+    self$setParamConstraints(lowerBound,upperBound,fixed)
+  
     ## Now perform additional checks for invariant validity
     self$checkInvariantValidity(invariants)
     self$checkEmissionValidity()
@@ -108,17 +104,6 @@ Emission$set("public","checkDataValidity", function(data,chainReplicates){
         stop("Non-numeric value in data matrix.")
     }
  })
-
-## When chains are replicates of one another, combine sum the grouped emissionLogProb tables and return summed values
-Emission$set("public","sumChainReplicates", function(ncores=1){
-    if(length(self$chainReplicates)>0){
-        return(mclapply(self$chainReplicates,function(x){
-            Reduce("+",self$emissionLogProb[x])
-        },mc.cores=ncores))
-    } else {
-        return(self$emissionLogProb)
-    }
-})
 
 ## Update log emission probability
 Emission$set("public","updateEmissionProbabilities", function(){
