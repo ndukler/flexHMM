@@ -249,11 +249,20 @@ parameterObject$set("public","getChainParameterMatrix", function(paramType,chain
             stop("Out of range replicate query")
         }
     }
-    qOut=self$paramIndex[eval(.(paramType,chain,replicate)),.(replicate,start,end)]
-    pMat=matrix(0,ncol=max(abs(qOut$replicate)),nrow=qOut$end[1]-qOut$start[1]+1)
-    for(z in 1:nrow(qOut)){
-        pMat[,abs(qOut$replicate[z])]=self$params[qOut$start[z]:qOut$end[z]]
+    qOut=self$paramIndex[eval(.(paramType,chain,replicate)),.(paramType,replicate,start,end)]
+    pMatList=list()
+    for(z in unique(paramType)){
+        tmp=qOut[paramType==z]        
+        pMatList[[z]]=matrix(0,nrow=(tmp[1]$end-tmp[1]$start+1),ncol=max(tmp$replicate))
+        rownames(pMatList[[z]])=rep(z,nrow(pMatList[[z]]))
+        for(r in 1:nrow(tmp)){
+            pMatList[[z]][,tmp[r]$replicate]=self$params[self$getParamIndicies(z,chain,tmp[r]$replicate)]
+        }        
     }
+    if(is.null(replicate) || replicate == -1)
+        pMat=do.call("rbind",pMatList)
+    else
+        pMat=do.call("rbind",pMatList)[,replicate]
     return(pMat)
 })
 
