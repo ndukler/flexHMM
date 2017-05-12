@@ -122,10 +122,10 @@ updateAllParams <- function(x,hmmObj,nthreads){
     hmmObj$emission$params[!hmmObj$emission$fixed]=x[1:sum(!hmmObj$emission$fixed)]
     hmmObj$transition$params[!hmmObj$transition$fixed]=x[1:sum(!hmmObj$transition$fixed)+sum(!hmmObj$emission$fixed)]
     ## Update emission and transition probabilities
-    if(!sum(hmmObj$emission$fixed)>0){
+    if(!sum(hmmObj$emission$fixed)>0 || length(hmmObj$emission$emissionLogProb)==0){
         hmmObj$emission$updateEmissionProbabilities()
     }
-    if(!sum(hmmObj$transition$fixed)>0){
+    if(!sum(hmmObj$transition$fixed)>0 || length(hmmObj$transition$transitionLogProb)==0 ){
         hmmObj$transition$updateTransitionProbabilities()
     }
     ## Run forward algorithm
