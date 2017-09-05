@@ -229,7 +229,7 @@ parameterObject$set("public","getParamIndicies", function(paramType,chain=NULL,r
     return(as.numeric(out))
 })
 
-parameterObject$set("public","getChainParameterMatrix", function(paramType,chain,replicate=NULL){
+parameterObject$set("public","getChainParameterList", function(paramType,chain,replicate=NULL){
     ## Check that the parameter type is valid
     if(is.na(self$paramIndex[paramType]$group[1])){
         stop(paste("Invalid query for parameter of type",paramType))
@@ -237,16 +237,16 @@ parameterObject$set("public","getChainParameterMatrix", function(paramType,chain
     ## If parameter is chain specific
     if(self$paramIndex[eval(.(paramType))]$chain[1]==-1){
         chain=-1
-    } else if(is.na(self$paramIndex[eval(.(paramType,chain))]$group[1])){
-        stop("Out of range chain query")
+    } else if(sum(is.na(self$paramIndex[eval(.(paramType,chain))]$group))>0){
+        stop(paste("Out of range chain query for parameter(s):", unique(paramType[is.na(self$paramIndex[eval(.(paramType,chain))]$group)])))
     }    
     ## If a replicate is specified (but may be ignored)
     if(!is.null(replicate)){
         ## If it is not a replicate specific parameter
         if(self$paramIndex[eval(.(paramType,chain))]$replicate[1]==-1){
             replicate=-1
-        } else if(is.na(self$paramIndex[eval(.(paramType,chain,replicate))]$group[1])){
-            stop("Out of range replicate query")
+        } else if(sum(is.na(self$paramIndex[eval(.(paramType,chain,replicate))]$group))>0){
+            stop(paste("Out of range replicate query for parameter(s):",paramType[is.na(self$paramIndex[eval(.(paramType,chain,replicate))]$group)]))
         }
     }
     qOut=self$paramIndex[eval(.(paramType,chain,replicate)),.(paramType,replicate,start,end)]
@@ -259,11 +259,9 @@ parameterObject$set("public","getChainParameterMatrix", function(paramType,chain
             pMatList[[z]][,tmp[r]$replicate]=self$params[self$getParamIndicies(z,chain,tmp[r]$replicate)]
         }        
     }
-    if(is.null(replicate) || replicate == -1)
-        pMat=do.call("rbind",pMatList)
-    else
-        pMat=do.call("rbind",pMatList)[,replicate]
-    return(pMat)
+    if(!is.null(replicate) || replicate != -1)
+        pMatList=lapply(as.list(names(pMatList)), function(x) pMatList[[x]][,replicate])
+    return(pMatList)
 })
 
 
