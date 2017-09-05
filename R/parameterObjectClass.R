@@ -259,7 +259,7 @@ parameterObject$set("public","getChainParameterList", function(paramType,chain,r
             pMatList[[z]][,tmp[r]$replicate]=self$params[self$getParamIndicies(z,chain,tmp[r]$replicate)]
         }        
     }
-    if(!is.null(replicate) || replicate != -1)
+    if(!is.null(replicate) && replicate != -1)
         pMatList=lapply(as.list(names(pMatList)), function(x) pMatList[[x]][,replicate])
     return(pMatList)
 })
