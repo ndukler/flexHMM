@@ -1,3 +1,5 @@
+library(gridExtra)
+
 HMM <- R6Class("HMM",public=list(emission="Emission",transition="Transition",logPrior="numeric",alphaTable="list",betaTable="list",logLiklihood="numeric"))
 
 #' checkHMMValidity
@@ -64,16 +66,21 @@ logSumExpV <- function(x,byRow=FALSE){
 
 ## Implement method for the forward algorithm
 HMM$set("public","forwardAlgorithm", function(ncores=1){
+    ## Check which transitions are permissible that end in state X
+    permTrans=lapply(split(mat,seq(ncol(mat))),function(x) which(!is.infinite(x))-1)
+    ## Compute forward table in parallel for each chain
     self$alphaTable=mclapply(self$emission$emissionLogProb,function(x){
-        return(forwardAlgorithmCpp(x,self$transition$transitionLogProb,self$logPrior))
+        return(forwardAlgorithmSparseCpp(x,self$transition$transitionLogProb,self$logPrior,permTrans))
     },mc.cores=ncores)
 },overwrite=TRUE)
 
 
 ## Implement method for the backward algorithm
 HMM$set("public","backwardAlgorithm",function(ncores=1){
+    ## Check which transitions are permissible that end in state X (reverse)
+    permTrans=lapply(split(mat,seq(nrow(mat))),function(x) which(!is.infinite(x))-1)
     self$betaTable=mclapply(self$emission$emissionLogProb,function(x){
-        return(backwardAlgorithmCpp(x,self$transition$transitionLogProb))
+        return(backwardAlgorithmSparseCpp(x,self$transition$transitionLogProb))
     },mc.cores = ncores)
 })
 
@@ -156,6 +163,10 @@ setMethod("plot.hmm",signature=c(hmm="ANY",viterbi="ANY",marginal="ANY",truePath
               if(start>end){
                   stop("Start must be less than end")
               }
+              ## Initialize the plots
+              g.dat=ggplot()
+              g.path=ggplot()
+              g.mar=ggplot()
               ## Add elements one layer at a time
               g=ggplot()
               if(!is.null(hmm$emission$emissionLogProb)){
@@ -164,19 +175,25 @@ setMethod("plot.hmm",signature=c(hmm="ANY",viterbi="ANY",marginal="ANY",truePath
                       x[,index:=1:nrow(x)]
                       melt(x[index>=start & index <=end],id.vars="index")
                   }),idcol=TRUE)
-
+                  dat[,.id:=factor(.id,levels=names(hmm$emission$data[[chain]]))]
                   dat[,variable:=NULL]
                   dat[,type:="Raw data"]
-                  g=g+geom_point(data=dat,aes(x=index,y=value,color=.id),alpha=1/3,inherit.aes=FALSE)
+                  g=g+geom_raster(data=dat,aes(x=index,y=.id,fill=value),alpha=1/3,inherit.aes=FALSE)
+                  ## g.dat=g.dat+geom_raster(data=dat,aes(x=index,y=.id,fill=value),alpha=1/3,inherit.aes=FALSE)
               }
               if(!is.null(viterbi)){
                   vit=data.table(index=start:end,value=viterbi[[chain]][start:end],type="Viterbi")
                   tic=data.table(x=start,x1=end,y=1:max(hmm$transition$nstates),type="Viterbi")
                   g=g+geom_segment(data=tic,aes(x=x,y=y,xend=end,yend=y),linetype=2,color="gray",inherit.aes=FALSE)+
                       geom_line(data=vit,aes(x=index,y=value,linetype="Viterbi"),color="black",inherit.aes=FALSE)
+                  ## g.path=g.path+geom_segment(data=tic,aes(x=x,y=y,xend=end,yend=y),linetype=2,color="gray",inherit.aes=FALSE)+
+                  ##    geom_line(data=vit,aes(x=index,y=value,linetype="Viterbi"),color="black",inherit.aes=FALSE)
               }
               if(!is.null(truePath)){
                   tru=data.table(index=start:end,value=truePath[[chain]][start:end],type="Viterbi")
+                  ## g=g+geom_line(data=tru,aes(x=index,y=value,linetype="True Path"),color="red",inherit.aes=FALSE)+
+                  ##    guides(linetype=guide_legend(title="Path Type"))+
+                  ##   scale_linetype_manual(values=c(3,1))
                   g=g+geom_line(data=tru,aes(x=index,y=value,linetype="True Path"),color="red",inherit.aes=FALSE)+
                       guides(linetype=guide_legend(title="Path Type"))+
                       scale_linetype_manual(values=c(3,1))
@@ -187,6 +204,7 @@ setMethod("plot.hmm",signature=c(hmm="ANY",viterbi="ANY",marginal="ANY",truePath
                   mar=melt(mar,id.vars=c("index"))
                   mar[,variable:=gsub("value.V","class.",variable)]
                   mar[,type:="Marginal"]
+                  ## g.mar=g.mar+geom_bar(data=mar,aes(x=index,y=value,fill=variable),stat="identity",inherit.aes=FALSE)
                   g=g+geom_bar(data=mar,aes(x=index,y=value,fill=variable),stat="identity",inherit.aes=FALSE)
               }
               g=g+facet_wrap(~type,ncol=1,scales="free_y")+
