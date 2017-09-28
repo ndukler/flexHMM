@@ -67,21 +67,39 @@ logSumExpV <- function(x,byRow=FALSE){
 ## Implement method for the forward algorithm
 HMM$set("public","forwardAlgorithm", function(ncores=1){
     ## Check which transitions are permissible that end in state X
-    permTrans=lapply(split(mat,seq(ncol(mat))),function(x) which(!is.infinite(x))-1)
-    ## Compute forward table in parallel for each chain
-    self$alphaTable=mclapply(self$emission$emissionLogProb,function(x){
-        return(forwardAlgorithmSparseCpp(x,self$transition$transitionLogProb,self$logPrior,permTrans))
-    },mc.cores=ncores)
+    permTrans=lapply(split(self$transition$transitionLogProb,seq(ncol(self$transition$transitionLogProb))),function(x) which(!is.infinite(x))-1)
+    permTransV=unlist(permTrans,use.names=FALSE)
+    ## If matrix is more than 50% sparse use sparse 
+    if(length(permTransV) <= 0.5 * self$emission$nstates^2){
+        tLen=unlist(lapply(permTrans,length),use.names=FALSE)
+        ## Compute forward table in parallel for each chain
+        self$alphaTable=mclapply(self$emission$emissionLogProb,function(x){
+            return(forwardAlgorithmSparseCpp(x,self$transition$transitionLogProb,self$logPrior,permTransV,tLen))
+        },mc.cores=ncores)
+    } else {
+        self$alphaTable=mclapply(self$emission$emissionLogProb,function(x){
+            return(forwardAlgorithmCpp(x,self$transition$transitionLogProb,self$logPrior))
+        },mc.cores=ncores)
+    }
 },overwrite=TRUE)
-
 
 ## Implement method for the backward algorithm
 HMM$set("public","backwardAlgorithm",function(ncores=1){
     ## Check which transitions are permissible that end in state X (reverse)
-    permTrans=lapply(split(mat,seq(nrow(mat))),function(x) which(!is.infinite(x))-1)
-    self$betaTable=mclapply(self$emission$emissionLogProb,function(x){
-        return(backwardAlgorithmSparseCpp(x,self$transition$transitionLogProb))
-    },mc.cores = ncores)
+    permTrans=lapply(split(self$transition$transitionLogProb,seq(nrow(self$transition$transitionLogProb))),function(x) which(!is.infinite(x))-1)
+    permTransV=unlist(permTrans,use.names=FALSE)
+    ## If matrix is more than 25% sparse use sparse 
+    if(length(permTransV) <= 0.75 * self$emission$nstates^2){
+        tLen=unlist(lapply(permTrans,length),use.names=FALSE)
+        ## Compute forward table in parallel for each chain
+        self$betaTable=mclapply(self$emission$emissionLogProb,function(x){
+            return(backwardAlgorithmSparseCpp(x,self$transition$transitionLogProb,permTransV,tLen))
+        },mc.cores=ncores)
+    } else {
+        self$betaTable=mclapply(self$emission$emissionLogProb,function(x){
+            return(backwardAlgorithmCpp(x,self$transition$transitionLogProb))
+        },mc.cores=ncores)
+    }
 })
 
 ## Method to compute viterbi path

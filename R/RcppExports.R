@@ -2,10 +2,18 @@
 # Generator token: 10BE3573-1514-4C36-9D1C-5A225CD40393
 
 forwardAlgorithmCpp <- function(e, t, prior) {
-    .Call('flexHMM_forwardAlgorithmCpp', PACKAGE = 'flexHMM', e, t, prior)
+    .Call('_flexHMM_forwardAlgorithmCpp', PACKAGE = 'flexHMM', e, t, prior)
+}
+
+forwardAlgorithmSparseCpp <- function(e, t, prior, permTrans, tLen) {
+    .Call('_flexHMM_forwardAlgorithmSparseCpp', PACKAGE = 'flexHMM', e, t, prior, permTrans, tLen)
 }
 
 backwardAlgorithmCpp <- function(e, t) {
-    .Call('flexHMM_backwardAlgorithmCpp', PACKAGE = 'flexHMM', e, t)
+    .Call('_flexHMM_backwardAlgorithmCpp', PACKAGE = 'flexHMM', e, t)
+}
+
+backwardAlgorithmSparseCpp <- function(e, t, permTrans, tLen) {
+    .Call('_flexHMM_backwardAlgorithmSparseCpp', PACKAGE = 'flexHMM', e, t, permTrans, tLen)
 }
 

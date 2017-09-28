@@ -7,7 +7,7 @@ using namespace Rcpp;
 
 // forwardAlgorithmCpp
 NumericMatrix forwardAlgorithmCpp(NumericMatrix& e, NumericMatrix& t, NumericVector& prior);
-RcppExport SEXP flexHMM_forwardAlgorithmCpp(SEXP eSEXP, SEXP tSEXP, SEXP priorSEXP) {
+RcppExport SEXP _flexHMM_forwardAlgorithmCpp(SEXP eSEXP, SEXP tSEXP, SEXP priorSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -18,9 +18,24 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// forwardAlgorithmSparseCpp
+NumericMatrix forwardAlgorithmSparseCpp(NumericMatrix& e, NumericMatrix& t, NumericVector& prior, IntegerVector permTrans, IntegerVector tLen);
+RcppExport SEXP _flexHMM_forwardAlgorithmSparseCpp(SEXP eSEXP, SEXP tSEXP, SEXP priorSEXP, SEXP permTransSEXP, SEXP tLenSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< NumericMatrix& >::type e(eSEXP);
+    Rcpp::traits::input_parameter< NumericMatrix& >::type t(tSEXP);
+    Rcpp::traits::input_parameter< NumericVector& >::type prior(priorSEXP);
+    Rcpp::traits::input_parameter< IntegerVector >::type permTrans(permTransSEXP);
+    Rcpp::traits::input_parameter< IntegerVector >::type tLen(tLenSEXP);
+    rcpp_result_gen = Rcpp::wrap(forwardAlgorithmSparseCpp(e, t, prior, permTrans, tLen));
+    return rcpp_result_gen;
+END_RCPP
+}
 // backwardAlgorithmCpp
 NumericMatrix backwardAlgorithmCpp(NumericMatrix& e, NumericMatrix& t);
-RcppExport SEXP flexHMM_backwardAlgorithmCpp(SEXP eSEXP, SEXP tSEXP) {
+RcppExport SEXP _flexHMM_backwardAlgorithmCpp(SEXP eSEXP, SEXP tSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -29,4 +44,31 @@ BEGIN_RCPP
     rcpp_result_gen = Rcpp::wrap(backwardAlgorithmCpp(e, t));
     return rcpp_result_gen;
 END_RCPP
+}
+// backwardAlgorithmSparseCpp
+NumericMatrix backwardAlgorithmSparseCpp(NumericMatrix& e, NumericMatrix& t, IntegerVector permTrans, IntegerVector tLen);
+RcppExport SEXP _flexHMM_backwardAlgorithmSparseCpp(SEXP eSEXP, SEXP tSEXP, SEXP permTransSEXP, SEXP tLenSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< NumericMatrix& >::type e(eSEXP);
+    Rcpp::traits::input_parameter< NumericMatrix& >::type t(tSEXP);
+    Rcpp::traits::input_parameter< IntegerVector >::type permTrans(permTransSEXP);
+    Rcpp::traits::input_parameter< IntegerVector >::type tLen(tLenSEXP);
+    rcpp_result_gen = Rcpp::wrap(backwardAlgorithmSparseCpp(e, t, permTrans, tLen));
+    return rcpp_result_gen;
+END_RCPP
+}
+
+static const R_CallMethodDef CallEntries[] = {
+    {"_flexHMM_forwardAlgorithmCpp", (DL_FUNC) &_flexHMM_forwardAlgorithmCpp, 3},
+    {"_flexHMM_forwardAlgorithmSparseCpp", (DL_FUNC) &_flexHMM_forwardAlgorithmSparseCpp, 5},
+    {"_flexHMM_backwardAlgorithmCpp", (DL_FUNC) &_flexHMM_backwardAlgorithmCpp, 2},
+    {"_flexHMM_backwardAlgorithmSparseCpp", (DL_FUNC) &_flexHMM_backwardAlgorithmSparseCpp, 4},
+    {NULL, NULL, 0}
+};
+
+RcppExport void R_init_flexHMM(DllInfo *dll) {
+    R_registerRoutines(dll, NULL, CallEntries, NULL, NULL);
+    R_useDynamicSymbols(dll, FALSE);
 }
