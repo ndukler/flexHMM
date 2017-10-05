@@ -8,7 +8,7 @@
 ## @nstates defines the number of states in the HMM
 ## @chainReplicates is a 
 
-Emission <- R6Class("Emission",public=list(data=list(),emissionLogProb=list(),nstates=numeric(),chainReplicates=list()),inherit=parameterObject)
+Emission <- R6::R6Class("Emission",public=list(data=list(),emissionLogProb=list(),nstates=numeric(),chainReplicates=list()),inherit=parameterObject)
 
 ## Add generic constructor for all emission type objects
 Emission$set("public","initialize",function(data,nstates,params=list(),lowerBound=list(), upperBound=list(),fixed=list(),

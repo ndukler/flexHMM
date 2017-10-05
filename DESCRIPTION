@@ -10,12 +10,13 @@ License: What license is it under?
 Encoding: UTF-8
 LazyData: true
 LinkingTo: Rcpp
-Depends:
-  R6,
+Depends: 
+ Imports: 
+  Rcpp,
+  rphast,
+  cowplot,
   data.table,
   doParallel,
   ggplot2
-Imports: 
-  Rcpp,
-  rphast
+
 

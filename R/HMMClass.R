@@ -1,17 +1,4 @@
-library(gridExtra)
-library(cowplot)
-library(reshape2)
-
-HMM <- R6Class("HMM",public=list(emission="Emission",transition="Transition",logPrior="numeric",alphaTable="list",betaTable="list",logLiklihood="numeric"))
-
-#' checkHMMValidity
-#'
-#' This function allows you to express your love of cats.
-#' @param love Do you love cats? Defaults to TRUE.
-#' @keywords cats
-#' @export
-#' @examples
-#' cat_function()
+HMM <- R6::R6Class("HMM",public=list(emission="Emission",transition="Transition",logPrior="numeric",alphaTable="list",betaTable="list",logLiklihood="numeric"))
 
 ## Check validity of HMM object
 HMM$set("public","checkHMMValidity",function(){
@@ -187,58 +174,61 @@ setMethod("plot.hmm",signature=c(hmm="ANY",viterbi="ANY",marginal="ANY",truePath
                   stop("Start must be less than end")
               }
               ## Initialize the plots
-              g.dat=ggplot()
-              g.path=ggplot()
-              g.mar=ggplot()
+              g.dat=ggplot2::ggplot()
+              g.path=ggplot2::ggplot()
+              g.mar=ggplot2::ggplot()
               ## Add elements one layer at a time
               if(!is.null(hmm$emission$emissionLogProb)){
-                  dat=rbindlist(lapply(hmm$emission$data[[chain]],function(x){
+                  dat=data.table::rbindlist(lapply(hmm$emission$data[[chain]],function(x){
                       x=as.data.table(x)
                       x[,index:=1:nrow(x)]
                       melt(x[index>=start & index <=end],id.vars="index")
                   }),idcol=TRUE)
                   dat[,.id:=factor(.id,levels=names(hmm$emission$data[[chain]]))]
                   dat[,variable:=NULL]
-                  g.dat=g.dat+geom_raster(data=dat,aes(x=index,y=.id,fill=value),alpha=1/3,inherit.aes=FALSE)
-                  ## g.dat=g.dat+geom_raster(data=dat,aes(x=index,y=.id,fill=value),alpha=1/3,inherit.aes=FALSE)
+                  g.dat=g.dat+
+                      ggplot2::geom_raster(data=dat,aes(x=index,y=.id,fill=value),alpha=1/3,inherit.aes=FALSE)                
               }
               if(!is.null(viterbi)){
-                  tic=data.table(x=start,x1=end,y=1:max(hmm$transition$nstates))
-                  vit=data.table(index=start:end,value=viterbi[[chain]][start:end])
-                  g.path=g.path+geom_segment(data=tic,aes(x=x,y=y,xend=end,yend=y),linetype=2,color="gray",inherit.aes=FALSE)+
-                      geom_line(data=vit,aes(x=index,y=value,linetype="Viterbi"),color="black",inherit.aes=FALSE)
+                  tic=data.table::data.table(x=start,x1=end,y=1:max(hmm$transition$nstates))
+                  vit=data.table::data.table(index=start:end,value=viterbi[[chain]][start:end])
+                  g.path=g.path+
+                      ggplot2::geom_segment(data=tic,aes(x=x,y=y,xend=end,yend=y),linetype=2,color="gray",inherit.aes=FALSE)+
+                      ggplot2::geom_line(data=vit,aes(x=index,y=value,linetype="Viterbi"),color="black",inherit.aes=FALSE)
               }
               if(!is.null(truePath)){
-                  tru=data.table(index=start:end,value=truePath[[chain]][start:end],type="Viterbi")
-                  g.path=g.path+geom_line(data=tru,aes(x=index,y=value,linetype="True Path"),color="red",inherit.aes=FALSE)+
-                      guides(linetype=guide_legend(title="Path Type"))+
-                      scale_linetype_manual(values=c(3,1))
+                  tru=data.table::data.table(index=start:end,value=truePath[[chain]][start:end],type="Viterbi")
+                  g.path=g.path+
+                      ggplot2::geom_line(data=tru,aes(x=index,y=value,linetype="True Path"),color="red",inherit.aes=FALSE)+
+                      ggplot2::guides(linetype=guide_legend(title="Path Type"))+
+                      ggplot2::scale_linetype_manual(values=c(3,1))
 
               }
               if(!is.null(marginal)){
                   mar=data.table(index=start:end,value=marginal[[chain]][start:end,])
                   mar=melt(mar,id.vars=c("index"))
                   mar[,variable:=gsub("value.V","class.",variable)]
-                  ## g.mar=g.mar+geom_bar(data=mar,aes(x=index,y=value,fill=variable),stat="identity",inherit.aes=FALSE)
-                  g.mar=g.mar+geom_bar(data=mar,aes(x=index,y=value,fill=variable),stat="identity",inherit.aes=FALSE)
+                  g.mar=g.mar+
+                      ggplot2::geom_bar(data=mar,aes(x=index,y=value,fill=variable),stat="identity",inherit.aes=FALSE)
               }
               ## Allow for the addition of misc. information if it is a matrix or vector of the same length as the
               ## data. If it is a matrix it will be melted
               if(!is.null(misc)){
                   if(length(misc)==nrow(hmm$emission$data[[chain]][[1]])){
                       if(is.numeric(misc) | ncol(misc)==1){
-                          misc.sub=data.table(index=start:end,variable=as.factor(1),value=misc[start:end])
+                          misc.sub=data.table::data.table(index=start:end,variable=as.factor(1),value=misc[start:end])
                       }else if(is.matrix(misc)){
-                          misc.sub=data.table(index=start:end,melt(misc[start:end,])[,2:3])
-                          setnames(misc.sub,colnames(misc.sub)[2],"variable")
+                          misc.sub=data.table::data.table(index=start:end,reshape2::melt(misc[start:end,])[,2:3])
+                          data.table::setnames(misc.sub,colnames(misc.sub)[2],"variable")
                           misc.sub[,variable:=as.factor(variable)]
                       }
                   }
-                  g.misc=ggplot()+geom_raster(data=misc.sub,aes(x=index,y=variable,fill=value),inherit.aes=FALSE)
+                  g.misc=ggplot()+
+                      ggplot2::geom_raster(data=misc.sub,aes(x=index,y=variable,fill=value),inherit.aes=FALSE)
 
               }
               plots=paste(c("g.dat","g.mar","g.path","g.misc")[!c(is.null(TRUE),is.null(marginal),is.null(viterbi),is.null(misc))],collapse=",")
-              eval(parse(text=paste0("plot_grid(",plots,",ncol=1, align = 'v')")))
+              eval(parse(text=paste0("cowplot::plot_grid(",plots,",ncol=1, align = 'v')")))
               return(g)
 })
 

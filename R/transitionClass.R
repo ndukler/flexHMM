@@ -1,5 +1,5 @@
 ## Set generic transition class
-Transition <- R6Class("Transition",public=list(transitionLogProb=matrix(),nstates=numeric()),inherit=parameterObject)
+Transition <- R6::R6Class("Transition",public=list(transitionLogProb=matrix(),nstates=numeric()),inherit=parameterObject)
 
 Transition$set("public","initialize",function(nstates,params=list(),lowerBound=list(), upperBound=list(),fixed=list(),
                                               invariants=list(),chainSpecificParameters=NULL){

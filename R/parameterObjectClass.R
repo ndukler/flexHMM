@@ -1,21 +1,59 @@
-## @params is a vector of paramters that can be optimized
-## @paramType is a vector of labels for the parameters that can be used to access them by name (same order as params)
-## @fixed a vector of logical values that dertermines if a parameter is to be optimized (same order as params)
-## @lowerBound is a vector of values that sets a lower bound on the parameter for box optimization (same order as params)
-## @upperBound is a vector of values that sets an upper bound on the parameter for box optimization (same order as params)
-## @invariants is a list to hold any parameters that are constant by the nature of the problem and can never be optimized. For example
-##             the enumeration of the tree states, or scaling values for the data matricies. The list elements can take any form for
-##             ease of use.
-## @chainSpecificParameters is a two layer list where the first matches a parameter name and the second groups together chains where the
-##                          value of that parameter is tied
+## @field paramType  is a vector of labels for the parameters that can be used to access them by name (same order as params)
+## @field fixed a vector of logical values that dertermines if a parameter is to be optimized (same order as params)
+## @field lowerBound is a vector of values that sets a lower bound on the parameter for box optimization (same order as params)
+## @field upperBound is a vector of values that sets an upper bound on the parameter for box optimization (same order as params)
+## @field invariants is a list to hold any parameters that are constant by the nature of the problem and can never be optimized. For example the enumeration of the tree states, or scaling values for the data matricies. The list elements can take any form for ease of use.
+## @field chainSpecificParameters is a two layer list where the first matches a parameter name and the second groups together chains where the value of that parameter is tied
 
-
-parameterObject <- R6Class("parameterObject",public=list(params=numeric(),paramType=character(),paramIndex=data.table(),fixed=logical(),
+parameterObject <- R6::R6Class("parameterObject",public=list(params=numeric(),paramType=character(),paramIndex=data.table::data.table(),fixed=logical(),
                                    lowerBound=numeric(),upperBound=numeric(),invariants=list(),replicatesPerParameter=numeric(0)))
 
 parameterObject$set("public","initialize",function(data,params=list(),lowerBound=list(), upperBound=list(),fixed=list(),
                                               invariants=list(),chainSpecificParameters=NULL,replicatesPerParameter=numeric(0)){
     stop("parameterObject is an abstract class.")
+})
+
+###
+## Index building
+###
+
+## Function to build parameter index
+parameterObject$set("public","buildParamIndex", function(params,chainSpecificParameters=list(),replicatesPerParameter=character()){
+    ## Do validity check on chain specific parameters if they exist
+    if(length(chainSpecificParameters)>0){
+        self$checkChainSpecificParameters(params,chainSpecificParameters)
+    }
+    ## Do validity checks on replicates if they exist
+    if(length(replicatesPerParameter)>0){
+        self$checkReplicates(params,replicatesPerParameter)
+    }
+    ## Iterate over all parameters
+    pIndList=list()
+    ind=1
+    for(p in names(params)){
+        ## Get the length of each parameter
+        p.len=length(params[[p]])
+        ## If the parameter is replicate specific get number of replicates, else 1
+        if(!is.na(replicatesPerParameter[p])){
+            rpls=1:replicatesPerParameter[p]
+        } else{
+            rpls=-1
+        }
+        ## If the parameter is chain specific get the number of chains
+        if(!is.null(chainSpecificParameters[[p]])){
+            pIndList[[p]]=data.table::rbindlist(lapply(chainSpecificParameters[[p]], function(x) data.table::data.table(chain=rep(x,each=length(rpls)),replicate=rpls)),idcol="group")
+        } else{
+            pIndList[[p]]=data.table::data.table(group=-1,chain=-1,replicate=rpls)
+        }
+        pIndList[[p]][,tmp:=as.numeric(factor(paste0(group,".",replicate)))-1]
+        ## Set start and end indicies
+        pIndList[[p]][,start:=ind+tmp*p.len]
+        pIndList[[p]][,end:=start+p.len-1]
+        ind=max(pIndList[[p]]$end)+1
+        pIndList[[p]][,tmp:=NULL]
+    }
+    self$paramIndex=data.table::rbindlist(pIndList,idcol='paramType')
+    setkeyv(self$paramIndex,cols=c("paramType","chain","replicate"))
 })
 
 #####
@@ -80,49 +118,6 @@ parameterObject$set("public","checkReplicates", function(params,replicatesPerPar
         stop(paste("A chainSpecificParameter was specified for the following non-existant parameters:",
                    names(replicatesPerParameter)[!names(replicatesPerParameter) %in% names(params)]))
     }
-})
-
-###
-## Index building
-###
-
-## Function to build parameter index
-parameterObject$set("public","buildParamIndex", function(params,chainSpecificParameters=list(),replicatesPerParameter=character()){
-    ## Do validity check on chain specific parameters if they exist
-    if(length(chainSpecificParameters)>0){
-        self$checkChainSpecificParameters(params,chainSpecificParameters)
-    }
-    ## Do validity checks on replicates if they exist
-    if(length(replicatesPerParameter)>0){
-        self$checkReplicates(params,replicatesPerParameter)
-    }
-    ## Iterate over all parameters
-    pIndList=list()
-    ind=1
-    for(p in names(params)){
-        ## Get the length of each parameter
-        p.len=length(params[[p]])
-        ## If the parameter is replicate specific get number of replicates, else 1
-        if(!is.na(replicatesPerParameter[p])){
-            rpls=1:replicatesPerParameter[p]
-        } else{
-            rpls=-1
-        }
-        ## If the parameter is chain specific get the number of chains
-        if(!is.null(chainSpecificParameters[[p]])){
-            pIndList[[p]]=rbindlist(lapply(chainSpecificParameters[[p]], function(x) data.table(chain=rep(x,each=length(rpls)),replicate=rpls)),idcol="group")
-        } else{
-            pIndList[[p]]=data.table(group=-1,chain=-1,replicate=rpls)
-        }
-        pIndList[[p]][,tmp:=as.numeric(factor(paste0(group,".",replicate)))-1]
-        ## Set start and end indicies
-        pIndList[[p]][,start:=ind+tmp*p.len]
-        pIndList[[p]][,end:=start+p.len-1]
-        ind=max(pIndList[[p]]$end)+1
-        pIndList[[p]][,tmp:=NULL]
-    }
-    self$paramIndex=rbindlist(pIndList,idcol='paramType')
-    setkeyv(self$paramIndex,cols=c("paramType","chain","replicate"))
 })
 
 ###
@@ -272,11 +267,11 @@ parameterObject$set("public","getChainParameterList", function(paramType,chain,r
 ## Returns a table of parameters for the HMM object
 parameterObject$set("public","getParameterTable",function(){
     pTab=foreach(i=1:nrow(self$paramIndex)) %do% {
-        with(self$paramIndex,data.table(paramName=rep(paramType[i],end[i]-start[i]+1),chain=rep(chain[i],end[i]-start[i]+1),
+        with(self$paramIndex,data.table::data.table(paramName=rep(paramType[i],end[i]-start[i]+1),chain=rep(chain[i],end[i]-start[i]+1),
                                         replicate=rep(replicate[i],end[i]-start[i]+1),
                                         value=self$params[self$paramIndex$start[i]:self$paramIndex$end[i]]))
     }
-    pTab=rbindlist(pTab)
+    pTab=data.table::rbindlist(pTab)
     return(pTab)
 })
 
