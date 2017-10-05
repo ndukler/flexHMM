@@ -1,4 +1,6 @@
 library(gridExtra)
+library(cowplot)
+library(reshape2)
 
 HMM <- R6Class("HMM",public=list(emission="Emission",transition="Transition",logPrior="numeric",alphaTable="list",betaTable="list",logLiklihood="numeric"))
 
@@ -169,11 +171,14 @@ fitHMM <- function(hmm,nthreads=1){
                  logfile="foo.log",hmmObj=hmm,nthreads=nthreads)
 }
 
-setGeneric("plot.hmm",function(hmm=NULL,viterbi=NULL,marginal=NULL,truePath=NULL,start=NA_real_,end=NA_real_,chain=1){ standardGeneric("plot.hmm") })
+setGeneric("plot.hmm",function(hmm=NULL,viterbi=NULL,marginal=NULL,truePath=NULL,misc=NULL,start=NA_real_,end=NA_real_,chain=1){ standardGeneric("plot.hmm") })
 ## Now some methods to plot HMM
 setMethod("plot.hmm",signature=c(hmm="ANY",viterbi="ANY",marginal="ANY",truePath="ANY",start="numeric",end="numeric",chain="ANY"),
           definition=function(hmm,viterbi=NULL,marginal=NULL,truePath=NULL,start=NA_real_,end=NA_real_,chain=1){
               ## If start and end not set, use full data length as default
+              if(chain < 1 | !is.integer(chain)){
+                  stop("Chain value must be an integer greater than 0.")
+              }
               if(is.na(start))
                   start=1
               if(is.na(end))
@@ -186,7 +191,6 @@ setMethod("plot.hmm",signature=c(hmm="ANY",viterbi="ANY",marginal="ANY",truePath
               g.path=ggplot()
               g.mar=ggplot()
               ## Add elements one layer at a time
-              g=ggplot()
               if(!is.null(hmm$emission$emissionLogProb)){
                   dat=rbindlist(lapply(hmm$emission$data[[chain]],function(x){
                       x=as.data.table(x)
@@ -195,24 +199,18 @@ setMethod("plot.hmm",signature=c(hmm="ANY",viterbi="ANY",marginal="ANY",truePath
                   }),idcol=TRUE)
                   dat[,.id:=factor(.id,levels=names(hmm$emission$data[[chain]]))]
                   dat[,variable:=NULL]
-                  dat[,type:="Raw data"]
-                  g=g+geom_raster(data=dat,aes(x=index,y=.id,fill=value),alpha=1/3,inherit.aes=FALSE)
+                  g.dat=g.dat+geom_raster(data=dat,aes(x=index,y=.id,fill=value),alpha=1/3,inherit.aes=FALSE)
                   ## g.dat=g.dat+geom_raster(data=dat,aes(x=index,y=.id,fill=value),alpha=1/3,inherit.aes=FALSE)
               }
               if(!is.null(viterbi)){
-                  vit=data.table(index=start:end,value=viterbi[[chain]][start:end],type="Viterbi")
-                  tic=data.table(x=start,x1=end,y=1:max(hmm$transition$nstates),type="Viterbi")
-                  g=g+geom_segment(data=tic,aes(x=x,y=y,xend=end,yend=y),linetype=2,color="gray",inherit.aes=FALSE)+
+                  tic=data.table(x=start,x1=end,y=1:max(hmm$transition$nstates))
+                  vit=data.table(index=start:end,value=viterbi[[chain]][start:end])
+                  g.path=g.path+geom_segment(data=tic,aes(x=x,y=y,xend=end,yend=y),linetype=2,color="gray",inherit.aes=FALSE)+
                       geom_line(data=vit,aes(x=index,y=value,linetype="Viterbi"),color="black",inherit.aes=FALSE)
-                  ## g.path=g.path+geom_segment(data=tic,aes(x=x,y=y,xend=end,yend=y),linetype=2,color="gray",inherit.aes=FALSE)+
-                  ##    geom_line(data=vit,aes(x=index,y=value,linetype="Viterbi"),color="black",inherit.aes=FALSE)
               }
               if(!is.null(truePath)){
                   tru=data.table(index=start:end,value=truePath[[chain]][start:end],type="Viterbi")
-                  ## g=g+geom_line(data=tru,aes(x=index,y=value,linetype="True Path"),color="red",inherit.aes=FALSE)+
-                  ##    guides(linetype=guide_legend(title="Path Type"))+
-                  ##   scale_linetype_manual(values=c(3,1))
-                  g=g+geom_line(data=tru,aes(x=index,y=value,linetype="True Path"),color="red",inherit.aes=FALSE)+
+                  g.path=g.path+geom_line(data=tru,aes(x=index,y=value,linetype="True Path"),color="red",inherit.aes=FALSE)+
                       guides(linetype=guide_legend(title="Path Type"))+
                       scale_linetype_manual(values=c(3,1))
 
@@ -221,12 +219,26 @@ setMethod("plot.hmm",signature=c(hmm="ANY",viterbi="ANY",marginal="ANY",truePath
                   mar=data.table(index=start:end,value=marginal[[chain]][start:end,])
                   mar=melt(mar,id.vars=c("index"))
                   mar[,variable:=gsub("value.V","class.",variable)]
-                  mar[,type:="Marginal"]
                   ## g.mar=g.mar+geom_bar(data=mar,aes(x=index,y=value,fill=variable),stat="identity",inherit.aes=FALSE)
-                  g=g+geom_bar(data=mar,aes(x=index,y=value,fill=variable),stat="identity",inherit.aes=FALSE)
+                  g.mar=g.mar+geom_bar(data=mar,aes(x=index,y=value,fill=variable),stat="identity",inherit.aes=FALSE)
               }
-              g=g+facet_wrap(~type,ncol=1,scales="free_y")+
-                  theme_bw()
+              ## Allow for the addition of misc. information if it is a matrix or vector of the same length as the
+              ## data. If it is a matrix it will be melted
+              if(!is.null(misc)){
+                  if(length(misc)==nrow(hmm$emission$data[[chain]][[1]])){
+                      if(is.numeric(misc) | ncol(misc)==1){
+                          misc.sub=data.table(index=start:end,variable=as.factor(1),value=misc[start:end])
+                      }else if(is.matrix(misc)){
+                          misc.sub=data.table(index=start:end,melt(misc[start:end,])[,2:3])
+                          setnames(misc.sub,colnames(misc.sub)[2],"variable")
+                          misc.sub[,variable:=as.factor(variable)]
+                      }
+                  }
+                  g.misc=ggplot()+geom_raster(data=misc.sub,aes(x=index,y=variable,fill=value),inherit.aes=FALSE)
+
+              }
+              plots=paste(c("g.dat","g.mar","g.path","g.misc")[!c(is.null(TRUE),is.null(marginal),is.null(viterbi),is.null(misc))],collapse=",")
+              eval(parse(text=paste0("plot_grid(",plots,",ncol=1, align = 'v')")))
               return(g)
 })
 
