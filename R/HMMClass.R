@@ -180,7 +180,7 @@ setMethod("plot.hmm",signature=c(hmm="ANY",viterbi="ANY",marginal="ANY",truePath
               ## Add elements one layer at a time
               if(!is.null(hmm$emission$emissionLogProb)){
                   dat=data.table::rbindlist(lapply(hmm$emission$data[[chain]],function(x){
-                      x=as.data.table(x)
+                      x=data.table::as.data.table(x)
                       x[,index:=1:nrow(x)]
                       melt(x[index>=start & index <=end],id.vars="index")
                   }),idcol=TRUE)
