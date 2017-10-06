@@ -214,8 +214,8 @@ setMethod("plot.hmm",signature=c(hmm="ANY",viterbi="ANY",marginal="ANY",truePath
               ## Allow for the addition of misc. information if it is a matrix or vector of the same length as the
               ## data. If it is a matrix it will be melted
               if(!is.null(misc)){
-                  if(length(misc)==nrow(hmm$emission$data[[chain]][[1]])){
-                      if(is.numeric(misc) | ncol(misc)==1){
+                  if(nrow(as.matrix(misc))==nrow(hmm$emission$data[[chain]][[1]])){
+                      if(ncol(as.matrix(misc))==1){
                           misc.sub=data.table::data.table(index=start:end,variable=as.factor(1),value=misc[start:end])
                       }else if(is.matrix(misc)){
                           misc.sub=data.table::data.table(index=start:end,reshape2::melt(misc[start:end,])[,2:3])
@@ -226,7 +226,7 @@ setMethod("plot.hmm",signature=c(hmm="ANY",viterbi="ANY",marginal="ANY",truePath
                       }
                   }
                   g.misc=ggplot()+
-                      ggplot2::geom_raster(data=misc.sub,aes(x=index,y=variable,fill=value),inherit.aes=FALSE)
+                       ggplot2::geom_raster(data=misc.sub,aes(x=index,y=variable,fill=value),inherit.aes=FALSE)
               }
               plots=paste(c("g.dat","g.mar","g.path","g.misc")[!c(is.null(TRUE),is.null(marginal),is.null(viterbi),is.null(misc))],collapse=",")
               g=eval(parse(text=paste0("cowplot::plot_grid(",plots,",ncol=1, align = 'v')")))
