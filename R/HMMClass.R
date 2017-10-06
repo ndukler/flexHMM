@@ -160,10 +160,10 @@ fitHMM <- function(hmm,nthreads=1){
 
 setGeneric("plot.hmm",function(hmm=NULL,viterbi=NULL,marginal=NULL,truePath=NULL,misc=NULL,start=NA_real_,end=NA_real_,chain=1){ standardGeneric("plot.hmm") })
 ## Now some methods to plot HMM
-setMethod("plot.hmm",signature=c(hmm="ANY",viterbi="ANY",marginal="ANY",truePath="ANY",start="numeric",end="numeric",chain="ANY"),
-          definition=function(hmm,viterbi=NULL,marginal=NULL,truePath=NULL,start=NA_real_,end=NA_real_,chain=1){
+setMethod("plot.hmm",signature=c(hmm="ANY",viterbi="ANY",marginal="ANY",truePath="ANY",misc="ANY",start="numeric",end="numeric",chain="ANY"),
+          definition=function(hmm,viterbi=NULL,marginal=NULL,truePath=NULL,misc=NULL,start=NA_real_,end=NA_real_,chain=1){
               ## If start and end not set, use full data length as default
-              if(chain < 1 | !is.integer(chain)){
+              if(chain < 1){
                   stop("Chain value must be an integer greater than 0.")
               }
               if(is.na(start))
@@ -221,14 +221,15 @@ setMethod("plot.hmm",signature=c(hmm="ANY",viterbi="ANY",marginal="ANY",truePath
                           misc.sub=data.table::data.table(index=start:end,reshape2::melt(misc[start:end,])[,2:3])
                           data.table::setnames(misc.sub,colnames(misc.sub)[2],"variable")
                           misc.sub[,variable:=as.factor(variable)]
+                      } else {
+                          stop("misc is not a matrix or vector of the same length as the chain being plotted")
                       }
                   }
                   g.misc=ggplot()+
                       ggplot2::geom_raster(data=misc.sub,aes(x=index,y=variable,fill=value),inherit.aes=FALSE)
-
               }
               plots=paste(c("g.dat","g.mar","g.path","g.misc")[!c(is.null(TRUE),is.null(marginal),is.null(viterbi),is.null(misc))],collapse=",")
-              eval(parse(text=paste0("cowplot::plot_grid(",plots,",ncol=1, align = 'v')")))
+              g=eval(parse(text=paste0("cowplot::plot_grid(",plots,",ncol=1, align = 'v')")))
               return(g)
 })
 
