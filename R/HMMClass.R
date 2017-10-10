@@ -187,21 +187,24 @@ setMethod("plot.hmm",signature=c(hmm="ANY",viterbi="ANY",marginal="ANY",truePath
                   dat[,.id:=factor(.id,levels=names(hmm$emission$data[[chain]]))]
                   dat[,variable:=NULL]
                   g.dat=g.dat+
-                      ggplot2::geom_raster(data=dat,aes(x=index,y=.id,fill=value),alpha=1/3,inherit.aes=FALSE)                
+                      ggplot2::geom_raster(data=dat,aes(x=index,y=.id,fill=value),alpha=1/3,inherit.aes=FALSE)+
+                      cowplot::theme_cowplot()
               }
               if(!is.null(viterbi)){
                   tic=data.table::data.table(x=start,x1=end,y=1:max(hmm$transition$nstates))
                   vit=data.table::data.table(index=start:end,value=viterbi[[chain]][start:end])
                   g.path=g.path+
                       ggplot2::geom_segment(data=tic,aes(x=x,y=y,xend=end,yend=y),linetype=2,color="gray",inherit.aes=FALSE)+
-                      ggplot2::geom_line(data=vit,aes(x=index,y=value,linetype="Viterbi"),color="black",inherit.aes=FALSE)
+                      ggplot2::geom_line(data=vit,aes(x=index,y=value,linetype="Viterbi"),color="black",inherit.aes=FALSE)+
+                      cowplot::theme_cowplot()
               }
               if(!is.null(truePath)){
                   tru=data.table::data.table(index=start:end,value=truePath[[chain]][start:end],type="Viterbi")
                   g.path=g.path+
                       ggplot2::geom_line(data=tru,aes(x=index,y=value,linetype="True Path"),color="red",inherit.aes=FALSE)+
                       ggplot2::guides(linetype=guide_legend(title="Path Type"))+
-                      ggplot2::scale_linetype_manual(values=c(3,1))
+                      ggplot2::scale_linetype_manual(values=c(3,1))+
+                      cowplot::theme_cowplot()
 
               }
               if(!is.null(marginal)){
@@ -209,7 +212,8 @@ setMethod("plot.hmm",signature=c(hmm="ANY",viterbi="ANY",marginal="ANY",truePath
                   mar=melt(mar,id.vars=c("index"))
                   mar[,variable:=gsub("value.V","class.",variable)]
                   g.mar=g.mar+
-                      ggplot2::geom_bar(data=mar,aes(x=index,y=value,fill=variable),stat="identity",inherit.aes=FALSE)
+                      ggplot2::geom_bar(data=mar,aes(x=index,y=value,fill=variable),stat="identity",inherit.aes=FALSE)+
+                      cowplot::theme_cowplot()
               }
               ## Allow for the addition of misc. information if it is a matrix or vector of the same length as the
               ## data. If it is a matrix it will be melted
@@ -226,7 +230,8 @@ setMethod("plot.hmm",signature=c(hmm="ANY",viterbi="ANY",marginal="ANY",truePath
                       }
                   }
                   g.misc=ggplot()+
-                       ggplot2::geom_raster(data=misc.sub,aes(x=index,y=variable,fill=value),inherit.aes=FALSE)
+                       ggplot2::geom_raster(data=misc.sub,aes(x=index,y=variable,fill=value),inherit.aes=FALSE)+
+                       cowplot::theme_cowplot()
               }
               plots=paste(c("g.dat","g.mar","g.path","g.misc")[!c(is.null(TRUE),is.null(marginal),is.null(viterbi),is.null(misc))],collapse=",")
               g=eval(parse(text=paste0("cowplot::plot_grid(",plots,",ncol=1, align = 'v')")))
