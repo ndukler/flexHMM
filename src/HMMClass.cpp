@@ -54,10 +54,10 @@ NumericMatrix forwardAlgorithmSparseCpp(NumericMatrix& e, NumericMatrix& t, Nume
       int position=0; //track position in acceptable transition vector
       // iterate over states
       for(int j=0;j < nsta; j++){
-	NumericVector foo(nsta);
+	NumericVector foo(tLen(j));
 	// iterate over permissible prior states
 	for(int k=position; k<position+tLen(j);k++){
-	  foo(permTrans(k))=aMat(i-1,permTrans(k))+t(permTrans(k),j);
+	  foo(k-position)=aMat(i-1,permTrans(k))+t(permTrans(k),j);
 	}
 	aMat(i,j) = logSumExpCpp(foo) + e(i,j);
 	position=position+tLen(j);
@@ -113,10 +113,10 @@ NumericMatrix backwardAlgorithmSparseCpp(NumericMatrix& e, NumericMatrix& t,  In
       int position=0; //track position in acceptable transition vector
       // iterate over states
       for(int j=0;j < nsta; j++){
-	NumericVector foo(nsta);
+	NumericVector foo(tLen(j));
 	// iterate over prior states
 	for(int k=position; k<position+tLen(j);k++){
-	  foo(permTrans(k))=bMat(i+1,permTrans(k)) + e(i+1,permTrans(k)) + t(j,permTrans(k)) ;
+	  foo(k-position)=bMat(i+1,permTrans(k)) + e(i+1,permTrans(k)) + t(j,permTrans(k)) ;
 	}
 	bMat(i,j) = logSumExpCpp(foo);
 	position=position+tLen(j);
