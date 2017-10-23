@@ -21,7 +21,7 @@ HMM$set("public","checkHMMValidity",function(){
 HMM$set("public","initialize", function(emission,transition){
     transition$updateTransitionProbabilities()
     ## Compute the prior distribution of states as the steady state distribution of the transition matrix
-    leadingEigenV=eigen(exp(transition$transitionLogProb))$vectors[,1]
+    leadingEigenV=eigen(t(exp(transition$transitionLogProb)))$vectors[,1]
     steadyState=as.numeric(log(leadingEigenV/sum(leadingEigenV)))
     ## Set object values
     self$emission=emission
