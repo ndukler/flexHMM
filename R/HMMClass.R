@@ -158,10 +158,10 @@ fitHMM <- function(hmm,nthreads=1){
                  logfile="foo.log",hmmObj=hmm,nthreads=nthreads)
 }
 
-setGeneric("plot.hmm",function(hmm=NULL,viterbi=NULL,marginal=NULL,truePath=NULL,misc=NULL,start=NA_real_,end=NA_real_,chain=1){ standardGeneric("plot.hmm") })
+setGeneric("plot.hmm",function(hmm=NULL,viterbi=NULL,marginal=NULL,truePath=NULL,misc=NULL,start=NA_real_,end=NA_real_,chain=1,dat.min=1,data.heatmap=FALSE){ standardGeneric("plot.hmm") })
 ## Now some methods to plot HMM
-setMethod("plot.hmm",signature=c(hmm="ANY",viterbi="ANY",marginal="ANY",truePath="ANY",misc="ANY",start="numeric",end="numeric",chain="ANY"),
-          definition=function(hmm,viterbi=NULL,marginal=NULL,truePath=NULL,misc=NULL,start=NA_real_,end=NA_real_,chain=1){
+setMethod("plot.hmm",signature=c(hmm="ANY",viterbi="ANY",marginal="ANY",truePath="ANY",misc="ANY",start="numeric",end="numeric",chain="ANY",dat.min="ANY",data.heatmap="logical"),
+          definition=function(hmm,viterbi=NULL,marginal=NULL,truePath=NULL,misc=NULL,start=NA_real_,end=NA_real_,chain=1,dat.min=1,data.heatmap=FALSE){
               ## If start and end not set, use full data length as default
               if(chain < 1){
                   stop("Chain value must be an integer greater than 0.")
@@ -186,9 +186,16 @@ setMethod("plot.hmm",signature=c(hmm="ANY",viterbi="ANY",marginal="ANY",truePath
                   }),idcol=TRUE)
                   dat[,.id:=factor(.id,levels=names(hmm$emission$data[[chain]]))]
                   dat[,variable:=NULL]
-                  g.dat=g.dat+
-                      ggplot2::geom_raster(data=dat,aes(x=index,y=.id,fill=value),alpha=1/3,inherit.aes=FALSE)+
-                      cowplot::theme_cowplot()
+                  if(data.heatmap){
+                      g.dat=g.dat+
+                          ggplot2::geom_raster(data=dat,aes(x=index,y=.id,fill=value),alpha=1/3,inherit.aes=FALSE)+
+                          cowplot::theme_cowplot()+
+                          ggplot2::scale_fill_gradient(limits=c(dat.min,max(dat$value,na.rm=TRUE)),low="#C1E7FA", high="#062F67",na.value="white",trans=log10_trans())
+                  }else{
+                      g.dat=g.dat+
+                          ggplot2::geom_point(data=dat,aes(x=index,color=.id,y=value),alpha=1/3,inherit.aes=FALSE)+
+                          cowplot::theme_cowplot()
+                  }
               }
               if(!is.null(viterbi)){
                   tic=data.table::data.table(x=start,x1=end,y=1:max(hmm$transition$nstates))
