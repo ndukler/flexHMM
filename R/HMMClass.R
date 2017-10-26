@@ -160,7 +160,7 @@ fitHMM <- function(hmm,nthreads=1){
 
 setGeneric("plot.hmm",function(hmm=NULL,viterbi=NULL,marginal=NULL,truePath=NULL,misc=NULL,start=NA_real_,end=NA_real_,chain=1,dat.min=1,data.heatmap=FALSE){ standardGeneric("plot.hmm") })
 ## Now some methods to plot HMM
-setMethod("plot.hmm",signature=c(hmm="ANY",viterbi="ANY",marginal="ANY",truePath="ANY",misc="ANY",start="numeric",end="numeric",chain="ANY",dat.min="ANY",data.heatmap="logical"),
+setMethod("plot.hmm",signature=c(hmm="ANY",viterbi="ANY",marginal="ANY",truePath="ANY",misc="ANY",start="numeric",end="numeric",chain="ANY",dat.min="ANY",data.heatmap="ANY"),
           definition=function(hmm,viterbi=NULL,marginal=NULL,truePath=NULL,misc=NULL,start=NA_real_,end=NA_real_,chain=1,dat.min=1,data.heatmap=FALSE){
               ## If start and end not set, use full data length as default
               if(chain < 1){
@@ -182,18 +182,19 @@ setMethod("plot.hmm",signature=c(hmm="ANY",viterbi="ANY",marginal="ANY",truePath
                   dat=data.table::rbindlist(lapply(hmm$emission$data[[chain]],function(x){
                       x=data.table::as.data.table(x)
                       x[,index:=1:nrow(x)]
-                      melt(x[index>=start & index <=end],id.vars="index")
+                      reshape2::melt(x[index>=start & index <=end],id.vars="index")
                   }),idcol=TRUE)
                   dat[,.id:=factor(.id,levels=names(hmm$emission$data[[chain]]))]
                   dat[,variable:=NULL]
                   if(data.heatmap){
                       g.dat=g.dat+
-                          ggplot2::geom_raster(data=dat,aes(x=index,y=.id,fill=value),alpha=1/3,inherit.aes=FALSE)+
+                          ggplot2::geom_raster(data=dat,ggplot2::aes(x=index,y=.id,fill=value),alpha=1/3,inherit.aes=FALSE)+
                           cowplot::theme_cowplot()+
-                          ggplot2::scale_fill_gradient(limits=c(dat.min,max(dat$value,na.rm=TRUE)),low="#C1E7FA", high="#062F67",na.value="white",trans=log10_trans())
+                          ggplot2::scale_fill_gradient(limits=c(dat.min,max(dat$value,na.rm=TRUE)),low="#C1E7FA", high="#062F67",na.value="white",trans=scales::log10_trans())
                   }else{
+                      dat=dat[value!=0,]
                       g.dat=g.dat+
-                          ggplot2::geom_point(data=dat,aes(x=index,color=.id,y=value),alpha=1/3,inherit.aes=FALSE)+
+                          ggplot2::geom_point(data=dat,ggplot2::aes(x=index,color=.id,y=value),inherit.aes=FALSE)+
                           cowplot::theme_cowplot()
                   }
               }
@@ -201,25 +202,25 @@ setMethod("plot.hmm",signature=c(hmm="ANY",viterbi="ANY",marginal="ANY",truePath
                   tic=data.table::data.table(x=start,x1=end,y=1:max(hmm$transition$nstates))
                   vit=data.table::data.table(index=start:end,value=viterbi[[chain]][start:end])
                   g.path=g.path+
-                      ggplot2::geom_segment(data=tic,aes(x=x,y=y,xend=end,yend=y),linetype=2,color="gray",inherit.aes=FALSE)+
-                      ggplot2::geom_line(data=vit,aes(x=index,y=value,linetype="Viterbi"),color="black",inherit.aes=FALSE)+
+                      ggplot2::geom_segment(data=tic,ggplot2::aes(x=x,y=y,xend=end,yend=y),linetype=2,color="gray",inherit.aes=FALSE)+
+                      ggplot2::geom_line(data=vit,ggplot2::aes(x=index,y=value,linetype="Viterbi"),color="black",inherit.aes=FALSE)+
                       cowplot::theme_cowplot()
               }
               if(!is.null(truePath)){
                   tru=data.table::data.table(index=start:end,value=truePath[[chain]][start:end],type="Viterbi")
                   g.path=g.path+
-                      ggplot2::geom_line(data=tru,aes(x=index,y=value,linetype="True Path"),color="red",inherit.aes=FALSE)+
+                      ggplot2::geom_line(data=tru,ggplot2::aes(x=index,y=value,linetype="True Path"),color="red",inherit.aes=FALSE)+
                       ggplot2::guides(linetype=guide_legend(title="Path Type"))+
                       ggplot2::scale_linetype_manual(values=c(3,1))+
                       cowplot::theme_cowplot()
 
               }
               if(!is.null(marginal)){
-                  mar=data.table(index=start:end,value=marginal[[chain]][start:end,])
-                  mar=melt(mar,id.vars=c("index"))
+                  mar=data.table::data.table(index=start:end,value=marginal[[chain]][start:end,])
+                  mar=reshape2::melt(mar,id.vars=c("index"))
                   mar[,variable:=gsub("value.V","class.",variable)]
                   g.mar=g.mar+
-                      ggplot2::geom_bar(data=mar,aes(x=index,y=value,fill=variable),stat="identity",inherit.aes=FALSE)+
+                      ggplot2::geom_bar(data=mar,ggplot2::aes(x=index,y=value,fill=variable),stat="identity",inherit.aes=FALSE)+
                       cowplot::theme_cowplot()
               }
               ## Allow for the addition of misc. information if it is a matrix or vector of the same length as the
