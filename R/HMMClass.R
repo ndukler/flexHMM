@@ -152,10 +152,17 @@ updateAllParams <- function(x,hmmObj,nthreads){
 ## Method to fit HMM
 fitHMM <- function(hmm,nthreads=1){
     ## Pass non-fixed parameters for optimization
-    rphast::optim.rphast(func=updateAllParams, params=c(hmm$emission$params[!hmm$emission$fixed],hmm$transition$params[!hmm$transition$fixed]),
-                 lower = c(hmm$emission$lowerBound[!hmm$emission$fixed],hmm$transition$lowerBound[!hmm$transition$fixed]),
-                 upper = c(hmm$emission$upperBound[!hmm$emission$fixed],hmm$transition$upperBound[!hmm$transition$fixed]),
-                 logfile="foo.log",hmmObj=hmm,nthreads=nthreads)
+    fitHMM <- function(hmm,nthreads=1){
+        ## Pass non-fixed parameters for optimization
+        optim(fn=updateAllParams, par=c(hmm$emission$params[!hmm$emission$fixed],hmm$transition$params[!hmm$transition$fixed]),
+              lower = c(hmm$emission$lowerBound[!hmm$emission$fixed],hmm$transition$lowerBound[!hmm$transition$fixed]),
+              upper = c(hmm$emission$upperBound[!hmm$emission$fixed],hmm$transition$upperBound[!hmm$transition$fixed]),
+              hmmObj=hmm,nthreads=nthreads,method="L-BFGS-B",control=list(trace=6,fnscale=-1))
+    }    
+    ## rphast::optim.rphast(func=updateAllParams, params=c(hmm$emission$params[!hmm$emission$fixed],hmm$transition$params[!hmm$transition$fixed]),
+    ##              lower = c(hmm$emission$lowerBound[!hmm$emission$fixed],hmm$transition$lowerBound[!hmm$transition$fixed]),
+    ##              upper = c(hmm$emission$upperBound[!hmm$emission$fixed],hmm$transition$upperBound[!hmm$transition$fixed]),
+    ##              logfile="foo.log",hmmObj=hmm,nthreads=nthreads)
 }
 
 setGeneric("plot.hmm",function(hmm=NULL,viterbi=NULL,marginal=NULL,truePath=NULL,misc=NULL,start=NA_real_,end=NA_real_,chain=1,dat.min=1,data.heatmap=FALSE){ standardGeneric("plot.hmm") })
@@ -182,7 +189,7 @@ setMethod("plot.hmm",signature=c(hmm="ANY",viterbi="ANY",marginal="ANY",truePath
                   dat=data.table::rbindlist(lapply(hmm$emission$data[[chain]],function(x){
                       x=data.table::as.data.table(x)
                       x[,index:=1:nrow(x)]
-                      reshape2::melt(x[index>=start & index <=end],id.vars="index")
+                      data.table::melt(x[index>=start & index <=end],id.vars="index")
                   }),idcol=TRUE)
                   dat[,.id:=factor(.id,levels=names(hmm$emission$data[[chain]]))]
                   dat[,variable:=NULL]
@@ -195,7 +202,8 @@ setMethod("plot.hmm",signature=c(hmm="ANY",viterbi="ANY",marginal="ANY",truePath
                       dat=dat[value!=0,]
                       g.dat=g.dat+
                           ggplot2::geom_point(data=dat,ggplot2::aes(x=index,color=.id,y=value),inherit.aes=FALSE)+
-                          cowplot::theme_cowplot()
+                          cowplot::theme_cowplot()+
+                          xlim(start,end)
                   }
               }
               if(!is.null(viterbi)){
@@ -217,7 +225,7 @@ setMethod("plot.hmm",signature=c(hmm="ANY",viterbi="ANY",marginal="ANY",truePath
               }
               if(!is.null(marginal)){
                   mar=data.table::data.table(index=start:end,value=marginal[[chain]][start:end,])
-                  mar=reshape2::melt(mar,id.vars=c("index"))
+                  mar=data.table::melt(mar,id.vars=c("index"))
                   mar[,variable:=gsub("value.V","class.",variable)]
                   g.mar=g.mar+
                       ggplot2::geom_bar(data=mar,ggplot2::aes(x=index,y=value,fill=variable),stat="identity",inherit.aes=FALSE)+
@@ -230,7 +238,7 @@ setMethod("plot.hmm",signature=c(hmm="ANY",viterbi="ANY",marginal="ANY",truePath
                       if(ncol(as.matrix(misc))==1){
                           misc.sub=data.table::data.table(index=start:end,variable=as.factor(1),value=misc[start:end])
                       }else if(is.matrix(misc)){
-                          misc.sub=data.table::data.table(index=start:end,reshape2::melt(misc[start:end,])[,2:3])
+                          misc.sub=data.table::data.table(index=start:end,data.table::melt(misc[start:end,])[,2:3])
                           data.table::setnames(misc.sub,colnames(misc.sub)[2],"variable")
                           misc.sub[,variable:=as.factor(variable)]
                       } else {
