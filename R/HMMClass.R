@@ -58,17 +58,26 @@ HMM$set("public","forwardAlgorithm", function(ncores=1){
     ## Check which transitions are permissible that end in state X
     permTrans=lapply(split(self$transition$transitionLogProb,seq(ncol(self$transition$transitionLogProb))),function(x) which(!is.infinite(x))-1)
     permTransV=unlist(permTrans,use.names=FALSE)
-    ## If matrix is more than 50% sparse use sparse 
+    ## Create iterator for emission table to minimize data export
+    emisi=iterators::iter(self$emission$emissionLogProb)
+    ## Create variables to reference transition prob and prior so they can be passed to parallel environment without R6 object
+    transition=self$transition$transitionLogProb
+    prior=self$logPrior
+    ## Register parallel environment if necessary
+    if(ncores>1 && emisi$length > 1){
+        registerDoParallel(cores=ncores)
+    }
+    ## If matrix is more than 50% sparse use sparse
     if(length(permTransV) <= 0.5 * self$emission$nstates^2){
         tLen=unlist(lapply(permTrans,length),use.names=FALSE)
         ## Compute forward table in parallel for each chain
-        self$alphaTable=mclapply(self$emission$emissionLogProb,function(x){
-            return(forwardAlgorithmSparseCpp(x,self$transition$transitionLogProb,self$logPrior,permTransV,tLen))
-        },mc.cores=ncores)
+        self$alphaTable=foreach(x=emisi, .noexport=c("self")) %dopar% {
+            return(forwardAlgorithmSparseCpp(x,transition,prior,permTransV,tLen))
+        }
     } else {
-        self$alphaTable=mclapply(self$emission$emissionLogProb,function(x){
-            return(forwardAlgorithmCpp(x,self$transition$transitionLogProb,self$logPrior))
-        },mc.cores=ncores)
+        self$alphaTable=foreach(x=emisi, .noexport=c("self")) %dopar% {
+            return(forwardAlgorithmCpp(x,transition,prior))        
+        }
     }
 },overwrite=TRUE)
 
@@ -150,19 +159,24 @@ updateAllParams <- function(x,hmmObj,nthreads){
 }
 
 ## Method to fit HMM
-fitHMM <- function(hmm,nthreads=1){
+fitHMM <- function(hmm,nthreads=1,file="foo.log",type=c("r","phast")){
     ## Pass non-fixed parameters for optimization
-    fitHMM <- function(hmm,nthreads=1){
-        ## Pass non-fixed parameters for optimization
+    sink(file=file,append=TRUE)
+    if(length(type)==2) type=type[1]
+    if(type=="r"){
         optim(fn=updateAllParams, par=c(hmm$emission$params[!hmm$emission$fixed],hmm$transition$params[!hmm$transition$fixed]),
               lower = c(hmm$emission$lowerBound[!hmm$emission$fixed],hmm$transition$lowerBound[!hmm$transition$fixed]),
               upper = c(hmm$emission$upperBound[!hmm$emission$fixed],hmm$transition$upperBound[!hmm$transition$fixed]),
               hmmObj=hmm,nthreads=nthreads,method="L-BFGS-B",control=list(trace=6,fnscale=-1))
-    }    
-    ## rphast::optim.rphast(func=updateAllParams, params=c(hmm$emission$params[!hmm$emission$fixed],hmm$transition$params[!hmm$transition$fixed]),
-    ##              lower = c(hmm$emission$lowerBound[!hmm$emission$fixed],hmm$transition$lowerBound[!hmm$transition$fixed]),
-    ##              upper = c(hmm$emission$upperBound[!hmm$emission$fixed],hmm$transition$upperBound[!hmm$transition$fixed]),
-    ##              logfile="foo.log",hmmObj=hmm,nthreads=nthreads)
+        sink()
+    } else if(type=="phast"){
+        rphast::optim.rphast(func=updateAllParams, params=c(hmm$emission$params[!hmm$emission$fixed],hmm$transition$params[!hmm$transition$fixed]),
+                             lower = c(hmm$emission$lowerBound[!hmm$emission$fixed],hmm$transition$lowerBound[!hmm$transition$fixed]),
+                             upper = c(hmm$emission$upperBound[!hmm$emission$fixed],hmm$transition$upperBound[!hmm$transition$fixed]),
+                             logfile="foo.log",hmmObj=hmm,nthreads=nthreads)
+    } else {
+        stop("Invalid optimizer")
+    }
 }
 
 setGeneric("plot.hmm",function(hmm=NULL,viterbi=NULL,marginal=NULL,truePath=NULL,misc=NULL,start=NA_real_,end=NA_real_,chain=1,dat.min=1,data.heatmap=FALSE){ standardGeneric("plot.hmm") })
@@ -191,6 +205,9 @@ setMethod("plot.hmm",signature=c(hmm="ANY",viterbi="ANY",marginal="ANY",truePath
                       x[,index:=1:nrow(x)]
                       data.table::melt(x[index>=start & index <=end],id.vars="index")
                   }),idcol=TRUE)
+                  if(is.null(names(hmm$emission$data[[chain]]))){
+                      names(hmm$emission$data[[chain]])=as.character(1:length(hmm$emission$data[[chain]]))
+                  }
                   dat[,.id:=factor(.id,levels=names(hmm$emission$data[[chain]]))]
                   dat[,variable:=NULL]
                   if(data.heatmap){
@@ -203,7 +220,8 @@ setMethod("plot.hmm",signature=c(hmm="ANY",viterbi="ANY",marginal="ANY",truePath
                       g.dat=g.dat+
                           ggplot2::geom_point(data=dat,ggplot2::aes(x=index,color=.id,y=value),inherit.aes=FALSE)+
                           cowplot::theme_cowplot()+
-                          xlim(start,end)
+                          ggplot2::xlim(start,end)+
+                          ggplot2::ylim(0,max(1,max(dat$value)))
                   }
               }
               if(!is.null(viterbi)){
@@ -212,7 +230,8 @@ setMethod("plot.hmm",signature=c(hmm="ANY",viterbi="ANY",marginal="ANY",truePath
                   g.path=g.path+
                       ggplot2::geom_segment(data=tic,ggplot2::aes(x=x,y=y,xend=end,yend=y),linetype=2,color="gray",inherit.aes=FALSE)+
                       ggplot2::geom_line(data=vit,ggplot2::aes(x=index,y=value,linetype="Viterbi"),color="black",inherit.aes=FALSE)+
-                      cowplot::theme_cowplot()
+                      cowplot::theme_cowplot()+
+                      ggplot2::xlim(start,end)
               }
               if(!is.null(truePath)){
                   tru=data.table::data.table(index=start:end,value=truePath[[chain]][start:end],type="Viterbi")
@@ -229,7 +248,8 @@ setMethod("plot.hmm",signature=c(hmm="ANY",viterbi="ANY",marginal="ANY",truePath
                   mar[,variable:=gsub("value.V","class.",variable)]
                   g.mar=g.mar+
                       ggplot2::geom_bar(data=mar,ggplot2::aes(x=index,y=value,fill=variable),stat="identity",inherit.aes=FALSE)+
-                      cowplot::theme_cowplot()
+                      cowplot::theme_cowplot()+
+                      ggplot2::xlim(start,end)
               }
               ## Allow for the addition of misc. information if it is a matrix or vector of the same length as the
               ## data. If it is a matrix it will be melted
@@ -245,9 +265,10 @@ setMethod("plot.hmm",signature=c(hmm="ANY",viterbi="ANY",marginal="ANY",truePath
                           stop("misc is not a matrix or vector of the same length as the chain being plotted")
                       }
                   }
-                  g.misc=ggplot()+
-                       ggplot2::geom_raster(data=misc.sub,aes(x=index,y=variable,fill=value),inherit.aes=FALSE)+
+                  g.misc=ggplot2::ggplot()+
+                       ggplot2::geom_raster(data=misc.sub,ggplot2::aes(x=index,y=variable,fill=value),inherit.aes=FALSE)+
                        cowplot::theme_cowplot()
+                       ggplot2::xlim(start,end)
               }
               plots=paste(c("g.dat","g.mar","g.path","g.misc")[!c(is.null(TRUE),is.null(marginal),is.null(viterbi),is.null(misc))],collapse=",")
               g=eval(parse(text=paste0("cowplot::plot_grid(",plots,",ncol=1, align = 'v')")))
