@@ -159,21 +159,33 @@ updateAllParams <- function(x,hmmObj,nthreads){
 }
 
 ## Method to fit HMM
-fitHMM <- function(hmm,nthreads=1,file="foo.log",type=c("r","phast")){
+fitHMM <- function(hmm,nthreads=1,log.file="foo.log",type=c("r","phast")){
     ## Pass non-fixed parameters for optimization
-    sink(file=file,append=TRUE)
+
     if(length(type)==2) type=type[1]
     if(type=="r"){
-        optim(fn=updateAllParams, par=c(hmm$emission$params[!hmm$emission$fixed],hmm$transition$params[!hmm$transition$fixed]),
-              lower = c(hmm$emission$lowerBound[!hmm$emission$fixed],hmm$transition$lowerBound[!hmm$transition$fixed]),
-              upper = c(hmm$emission$upperBound[!hmm$emission$fixed],hmm$transition$upperBound[!hmm$transition$fixed]),
-              hmmObj=hmm,nthreads=nthreads,method="L-BFGS-B",control=list(trace=6,fnscale=-1))
-        sink()
+        tryCatch({
+            sink(file=log.file,append=TRUE)
+            write(paste0(paste0(rep("-",30),collapse=""),"START",paste0(rep("-",30),collapse="")),stdout())
+            optim(fn=updateAllParams, par=c(hmm$emission$params[!hmm$emission$fixed],hmm$transition$params[!hmm$transition$fixed]),
+                  lower = c(hmm$emission$lowerBound[!hmm$emission$fixed],hmm$transition$lowerBound[!hmm$transition$fixed]),
+                  upper = c(hmm$emission$upperBound[!hmm$emission$fixed],hmm$transition$upperBound[!hmm$transition$fixed]),
+                  hmmObj=hmm,nthreads=nthreads,method="L-BFGS-B",control=list(trace=6,fnscale=-1,factr=1e10,REPORT=1))
+            write(paste0(paste0(rep("-",30),collapse=""),"END",paste0(rep("-",30),collapse="")),stdout())
+            sink()
+        }, interrupt=function(i){            
+            write(paste0(paste0(rep("-",30),collapse=""),"USER TERMINATED",paste0(rep("-",30),collapse="")),stdout())
+            sink()
+            warning("HMM optimization interrupted by user.")
+        }, error = function(e){
+            sink()
+            stop(e)
+        })
     } else if(type=="phast"){
         rphast::optim.rphast(func=updateAllParams, params=c(hmm$emission$params[!hmm$emission$fixed],hmm$transition$params[!hmm$transition$fixed]),
                              lower = c(hmm$emission$lowerBound[!hmm$emission$fixed],hmm$transition$lowerBound[!hmm$transition$fixed]),
                              upper = c(hmm$emission$upperBound[!hmm$emission$fixed],hmm$transition$upperBound[!hmm$transition$fixed]),
-                             logfile="foo.log",hmmObj=hmm,nthreads=nthreads)
+                             logfile=log.file,hmmObj=hmm,nthreads=nthreads)
     } else {
         stop("Invalid optimizer")
     }
