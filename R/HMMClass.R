@@ -1,4 +1,4 @@
-HMM <- R6::R6Class("HMM",public=list(emission="Emission",transition="Transition",logPrior="numeric",alphaTable="list",betaTable="list",logLiklihood="numeric"))
+HMM <- R6::R6Class("HMM",public=list(emission="Emission",transition="Transition",logPrior="numeric",alphaTable="list",betaTable="list",logLiklihood="numeric",cluster="cluster"))
 
 ## Check validity of HMM object
 HMM$set("public","checkHMMValidity",function(){
@@ -18,7 +18,7 @@ HMM$set("public","checkHMMValidity",function(){
 })
 
 ## constructor function for HMM object
-HMM$set("public","initialize", function(emission,transition){
+HMM$set("public","initialize", function(emission,transition,threads=1){
     transition$updateTransitionProbabilities()
     ## Compute the prior distribution of states as the steady state distribution of the transition matrix
     leadingEigenV=eigen(t(exp(transition$transitionLogProb)))$vectors[,1]
@@ -27,6 +27,7 @@ HMM$set("public","initialize", function(emission,transition){
     self$emission=emission
     self$transition=transition
     self$logPrior=steadyState
+    self$cluster=parallel::makeCluster(threads)
 },overwrite=TRUE)
 
 ##
@@ -54,7 +55,7 @@ logSumExpV <- function(x,byRow=FALSE){
 ###
 
 ## Implement method for the forward algorithm
-HMM$set("public","forwardAlgorithm", function(ncores=1){
+HMM$set("public","forwardAlgorithm", function(){
     ## Check which transitions are permissible that end in state X
     permTrans=lapply(split(self$transition$transitionLogProb,seq(ncol(self$transition$transitionLogProb))),function(x) which(!is.infinite(x))-1)
     permTransV=unlist(permTrans,use.names=FALSE)
@@ -63,10 +64,8 @@ HMM$set("public","forwardAlgorithm", function(ncores=1){
     ## Create variables to reference transition prob and prior so they can be passed to parallel environment without R6 object
     transition=self$transition$transitionLogProb
     prior=self$logPrior
-    ## Register parallel environment if necessary
-    if(ncores>1 && emisi$length > 1){
-        registerDoParallel(cores=ncores)
-    }
+    ## Register parallel environment
+    doParallel::registerDoParallel(cl=self$cluster)
     ## If matrix is more than 50% sparse use sparse
     if(length(permTransV) <= 0.5 * self$emission$nstates^2){
         tLen=unlist(lapply(permTrans,length),use.names=FALSE)
@@ -79,25 +78,37 @@ HMM$set("public","forwardAlgorithm", function(ncores=1){
             return(forwardAlgorithmCpp(x,transition,prior))        
         }
     }
+    ## Reset to sequential backend
+    foreach::registerDoSEQ()
 },overwrite=TRUE)
 
+
 ## Implement method for the backward algorithm
-HMM$set("public","backwardAlgorithm",function(ncores=1){
-    ## Check which transitions are permissible that end in state X (reverse)
+HMM$set("public","backwardAlgorithm",function(){
+    ## Check which transitions are permissible that end in state X
     permTrans=lapply(split(self$transition$transitionLogProb,seq(nrow(self$transition$transitionLogProb))),function(x) which(!is.infinite(x))-1)
     permTransV=unlist(permTrans,use.names=FALSE)
-    ## If matrix is more than 25% sparse use sparse 
-    if(length(permTransV) <= 0.75 * self$emission$nstates^2){
+    ## Create iterator for emission table to minimize data export
+    emisi=iterators::iter(self$emission$emissionLogProb)
+    ## Create variables to reference transition prob and prior so they can be passed to parallel environment without R6 object
+    transition=self$transition$transitionLogProb
+    prior=self$logPrior
+    ## Register parallel environment if necessary
+    doParallel::registerDoParallel(cl=self$cluster)
+    ## If matrix is more than 50% sparse use sparse
+    if(length(permTransV) <= 0.5 * self$emission$nstates^2){
         tLen=unlist(lapply(permTrans,length),use.names=FALSE)
         ## Compute forward table in parallel for each chain
-        self$betaTable=mclapply(self$emission$emissionLogProb,function(x){
-            return(backwardAlgorithmSparseCpp(x,self$transition$transitionLogProb,permTransV,tLen))
-        },mc.cores=ncores)
+        self$betaTable=foreach(x=emisi, .noexport=c("self")) %dopar% {
+            return(backwardAlgorithmSparseCpp(x,transition,permTransV,tLen))
+        }
     } else {
-        self$betaTable=mclapply(self$emission$emissionLogProb,function(x){
-            return(backwardAlgorithmCpp(x,self$transition$transitionLogProb))
-        },mc.cores=ncores)
+        self$betaTable=foreach(x=emisi, .noexport=c("self")) %dopar% {
+            return(forwardAlgorithmCpp(x,transition))        
+        }
     }
+    ## Reset to sequential backend
+    foreach::registerDoSEQ()
 })
 
 ## Method to compute viterbi path
@@ -137,7 +148,7 @@ HMM$set("public","getParameterTable",function(){
 })
 
 ## Function to pass to optim, that takes a set of values, and an HMM, and returns a negative log liklihood
-updateAllParams <- function(x,hmmObj,nthreads){
+updateAllParams <- function(x,hmmObj){
     if(length(x) != sum(!hmmObj$transition$fixed)+sum(!hmmObj$emission$fixed) ){
         stop("Length of x does not match the number of expected parameters")
     }
@@ -152,7 +163,7 @@ updateAllParams <- function(x,hmmObj,nthreads){
         hmmObj$transition$updateTransitionProbabilities()
     }
     ## Run forward algorithm
-    hmmObj$forwardAlgorithm(nthreads)
+    hmmObj$forwardAlgorithm()
     hmmObj$computeLogLiklihood()
     ## return(-hmmObj$logLiklihood)
     return(hmmObj$logLiklihood)
@@ -161,16 +172,15 @@ updateAllParams <- function(x,hmmObj,nthreads){
 ## Method to fit HMM
 fitHMM <- function(hmm,nthreads=1,log.file="foo.log",type=c("r","phast")){
     ## Pass non-fixed parameters for optimization
-
     if(length(type)==2) type=type[1]
     if(type=="r"){
         tryCatch({
             sink(file=log.file,append=TRUE)
             write(paste0(paste0(rep("-",30),collapse=""),"START",paste0(rep("-",30),collapse="")),stdout())
-            optim(fn=updateAllParams, par=c(hmm$emission$params[!hmm$emission$fixed],hmm$transition$params[!hmm$transition$fixed]),
+            final.params=optim(fn=updateAllParams, par=c(hmm$emission$params[!hmm$emission$fixed],hmm$transition$params[!hmm$transition$fixed]),
                   lower = c(hmm$emission$lowerBound[!hmm$emission$fixed],hmm$transition$lowerBound[!hmm$transition$fixed]),
                   upper = c(hmm$emission$upperBound[!hmm$emission$fixed],hmm$transition$upperBound[!hmm$transition$fixed]),
-                  hmmObj=hmm,nthreads=nthreads,method="L-BFGS-B",control=list(trace=6,fnscale=-1,factr=1e10,REPORT=1))
+                  hmmObj=hmm,method="L-BFGS-B",control=list(trace=6,fnscale=-1,factr=1e10,REPORT=1))
             write(paste0(paste0(rep("-",30),collapse=""),"END",paste0(rep("-",30),collapse="")),stdout())
             sink()
         }, interrupt=function(i){            
@@ -182,13 +192,17 @@ fitHMM <- function(hmm,nthreads=1,log.file="foo.log",type=c("r","phast")){
             stop(e)
         })
     } else if(type=="phast"){
-        rphast::optim.rphast(func=updateAllParams, params=c(hmm$emission$params[!hmm$emission$fixed],hmm$transition$params[!hmm$transition$fixed]),
+        final.params=rphast::optim.rphast(func=updateAllParams, params=c(hmm$emission$params[!hmm$emission$fixed],hmm$transition$params[!hmm$transition$fixed]),
                              lower = c(hmm$emission$lowerBound[!hmm$emission$fixed],hmm$transition$lowerBound[!hmm$transition$fixed]),
                              upper = c(hmm$emission$upperBound[!hmm$emission$fixed],hmm$transition$upperBound[!hmm$transition$fixed]),
-                             logfile=log.file,hmmObj=hmm,nthreads=nthreads)
+                             logfile=log.file,hmmObj=hmm)
     } else {
         stop("Invalid optimizer")
     }
+    ## Update hmm to use final parameters and update logLiklihood
+    hmm$emission$params[!hmm$emission$fixed]=final.params$par[1:sum(!hmm$emission$fixed)]
+    hmm$transition$params[!hmm$transition$fixed]=final.params$par[1:sum(!hmm$transition$fixed)+sum(!hmmObj$emission$fixed)]
+    hmm$computeLogLiklihood()
 }
 
 setGeneric("plot.hmm",function(hmm=NULL,viterbi=NULL,marginal=NULL,truePath=NULL,misc=NULL,start=NA_real_,end=NA_real_,chain=1,dat.min=1,data.heatmap=FALSE){ standardGeneric("plot.hmm") })
@@ -222,11 +236,15 @@ setMethod("plot.hmm",signature=c(hmm="ANY",viterbi="ANY",marginal="ANY",truePath
                   }
                   dat[,.id:=factor(.id,levels=names(hmm$emission$data[[chain]]))]
                   dat[,variable:=NULL]
-                  if(data.heatmap){
-                      g.dat=g.dat+
-                          ggplot2::geom_raster(data=dat,ggplot2::aes(x=index,y=.id,fill=value),alpha=1/3,inherit.aes=FALSE)+
-                          cowplot::theme_cowplot()+
-                          ggplot2::scale_fill_gradient(limits=c(dat.min,max(dat$value,na.rm=TRUE)),low="#C1E7FA", high="#062F67",na.value="white",trans=scales::log10_trans())
+                  dat.max=max(dat$value,na.rm=TRUE)
+                  dat.by=(log(dat.max)-log(dat.min))/5
+                  dat.seq=round(exp(seq(log(dat.min),log(dat.max),dat.by)),2)
+                  g.dat=g.dat+geom_raster(data=dat,aes(x=index,y=.id,fill=value),inherit.aes=FALSE)+
+                      scale_fill_gradient(limits=c(dat.min,dat.max),labels=as.character(dat.seq),breaks=dat.seq,low="#C1E7FA", high="#062F67",na.value="white",trans=scales::log10_trans())+
+                      ylab("Species")+
+                      xlab("Loci") +
+                      guides(fill=guide_colorbar(title="Trait Value"))+
+                       theme(axis.title.y=element_blank())                  
                   }else{
                       dat=dat[value!=0,]
                       g.dat=g.dat+
@@ -234,8 +252,7 @@ setMethod("plot.hmm",signature=c(hmm="ANY",viterbi="ANY",marginal="ANY",truePath
                           cowplot::theme_cowplot()+
                           ggplot2::xlim(start,end)+
                           ggplot2::ylim(0,max(1,max(dat$value)))
-                  }
-              }
+                  }         
               if(!is.null(viterbi)){
                   tic=data.table::data.table(x=start,x1=end,y=1:max(hmm$transition$nstates))
                   vit=data.table::data.table(index=start:end,value=viterbi[[chain]][start:end])
