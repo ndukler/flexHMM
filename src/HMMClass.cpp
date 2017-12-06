@@ -126,5 +126,29 @@ NumericMatrix backwardAlgorithmSparseCpp(NumericMatrix& e, NumericMatrix& t,  In
   return(bMat);
 }
 
+// [[Rcpp::export]] 
+NumericMatrix computeMarginalProbabilityCpp(const NumericMatrix& alpha, const NumericMatrix& beta){
+  int nobs = alpha.nrow();
+  int nsta = alpha.ncol();
+  NumericMatrix mProb(nobs,nsta);
+  for(int i=0; i<nobs;i++){
+    NumericVector x = alpha(i,_)+beta(i,_);
+    mProb(i,_)=exp(x-logSumExpCpp(x));
+  }
+  return(mProb);
+}
 
-
+// [[Rcpp::export]] 
+NumericVector computeViterbiPathCpp(const NumericMatrix& alpha, const NumericMatrix& trans){
+  int nobs = alpha.nrow();
+  int nsta = alpha.ncol();
+  NumericVector vPath(nobs);
+  vPath(nobs-1)=which_max(alpha(nobs-1,_));
+  if(nobs>1){
+    for(int i=nobs-2; i>=0;i--){
+      NumericVector x = alpha(i,_)+trans(_,vPath(i+1));
+      vPath(i)=which_max(x);
+    }
+  }
+  return(vPath);
+}

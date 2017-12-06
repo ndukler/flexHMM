@@ -56,6 +56,9 @@ logSumExpV <- function(x,byRow=FALSE){
 
 ## Implement method for the forward algorithm
 HMM$set("public","forwardAlgorithm", function(){
+    if(!is.null(self$alphaTable)){
+        self$alphaTable=NULL
+    }
     ## Check which transitions are permissible that end in state X
     permTrans=lapply(split(self$transition$transitionLogProb,seq(ncol(self$transition$transitionLogProb))),function(x) which(!is.infinite(x))-1)
     permTransV=unlist(permTrans,use.names=FALSE)
@@ -114,16 +117,17 @@ HMM$set("public","backwardAlgorithm",function(){
 ## Method to compute viterbi path
 HMM$set("public","computeViterbiPath",function(){
     vPathList=lapply(self$alphaTable,function(x){
-        vPath = numeric(nrow(x))
-        vPath[length(vPath)] = which.max(x[length(vPath),])
-        if(nrow(x)>1){
-            for(j in (nrow(x)-1):1){
-                vPath[j]=which.max(x[j,]+self$transition$transitionLogProb[,vPath[j+1]])
-            }
-        }
-        return(vPath)
+        return(computeViterbiPathCpp(x,self$transition$transitionLogProb))
     })
     return(vPathList)
+})
+
+## Method to compute marginal probability table
+HMM$set("public","computeMarginalProb",function(){
+    mProb=foreach(i=1:length(self$alphaTable)) %do% {
+        return(computeMarginalProbabilityCpp(self$alphaTable[[i]],self$betaTable[[i]]))
+    }
+    return(mProb)
 })
 
 ## Method to compute liklihood from alpha table
@@ -131,15 +135,6 @@ HMM$set("public","computeLogLiklihood",function(){
     self$logLiklihood=sum(unlist(lapply(self$alphaTable,function(x) logSumExp(x[nrow(x),])),use.names=FALSE))
     ## using beta table
     ## logSumExp(hmm@betaTable[[1]][1,]+hmm@emission@emissionLogProb[[1]][1,]+hmm@logPrior)
-})
-
-## Method to compute marginal probability table
-HMM$set("public","computeMarginalProb",function(){
-    mProb=list()
-    for(i in 1:length(self$alphaTable)){
-        mProb[[paste0(as.character(names(self$alphaTable)[i]),i)]]=exp((self$alphaTable[[i]]+self$betaTable[[i]])-logSumExpV(self$alphaTable[[i]]+self$betaTable[[i]],TRUE))
-    }
-    return(mProb)
 })
 
 ## Method to compute marginal probability table
@@ -201,7 +196,7 @@ fitHMM <- function(hmm,nthreads=1,log.file="foo.log",type=c("r","phast")){
     }
     ## Update hmm to use final parameters and update logLiklihood
     hmm$emission$params[!hmm$emission$fixed]=final.params$par[1:sum(!hmm$emission$fixed)]
-    hmm$transition$params[!hmm$transition$fixed]=final.params$par[1:sum(!hmm$transition$fixed)+sum(!hmmObj$emission$fixed)]
+    hmm$transition$params[!hmm$transition$fixed]=final.params$par[1:sum(!hmm$transition$fixed)+sum(!hmm$emission$fixed)]
     hmm$computeLogLiklihood()
 }
 
