@@ -17,3 +17,11 @@ backwardAlgorithmSparseCpp <- function(e, t, permTrans, tLen) {
     .Call('_flexHMM_backwardAlgorithmSparseCpp', PACKAGE = 'flexHMM', e, t, permTrans, tLen)
 }
 
+computeMarginalProbabilityCpp <- function(alpha, beta) {
+    .Call('_flexHMM_computeMarginalProbabilityCpp', PACKAGE = 'flexHMM', alpha, beta)
+}
+
+computeViterbiPathCpp <- function(alpha, trans) {
+    .Call('_flexHMM_computeViterbiPathCpp', PACKAGE = 'flexHMM', alpha, trans)
+}
+

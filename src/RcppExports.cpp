@@ -59,12 +59,38 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// computeMarginalProbabilityCpp
+NumericMatrix computeMarginalProbabilityCpp(const NumericMatrix& alpha, const NumericMatrix& beta);
+RcppExport SEXP _flexHMM_computeMarginalProbabilityCpp(SEXP alphaSEXP, SEXP betaSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const NumericMatrix& >::type alpha(alphaSEXP);
+    Rcpp::traits::input_parameter< const NumericMatrix& >::type beta(betaSEXP);
+    rcpp_result_gen = Rcpp::wrap(computeMarginalProbabilityCpp(alpha, beta));
+    return rcpp_result_gen;
+END_RCPP
+}
+// computeViterbiPathCpp
+NumericVector computeViterbiPathCpp(const NumericMatrix& alpha, const NumericMatrix& trans);
+RcppExport SEXP _flexHMM_computeViterbiPathCpp(SEXP alphaSEXP, SEXP transSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const NumericMatrix& >::type alpha(alphaSEXP);
+    Rcpp::traits::input_parameter< const NumericMatrix& >::type trans(transSEXP);
+    rcpp_result_gen = Rcpp::wrap(computeViterbiPathCpp(alpha, trans));
+    return rcpp_result_gen;
+END_RCPP
+}
 
 static const R_CallMethodDef CallEntries[] = {
     {"_flexHMM_forwardAlgorithmCpp", (DL_FUNC) &_flexHMM_forwardAlgorithmCpp, 3},
     {"_flexHMM_forwardAlgorithmSparseCpp", (DL_FUNC) &_flexHMM_forwardAlgorithmSparseCpp, 5},
     {"_flexHMM_backwardAlgorithmCpp", (DL_FUNC) &_flexHMM_backwardAlgorithmCpp, 2},
     {"_flexHMM_backwardAlgorithmSparseCpp", (DL_FUNC) &_flexHMM_backwardAlgorithmSparseCpp, 4},
+    {"_flexHMM_computeMarginalProbabilityCpp", (DL_FUNC) &_flexHMM_computeMarginalProbabilityCpp, 2},
+    {"_flexHMM_computeViterbiPathCpp", (DL_FUNC) &_flexHMM_computeViterbiPathCpp, 2},
     {NULL, NULL, 0}
 };
 

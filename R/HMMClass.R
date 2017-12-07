@@ -116,19 +116,21 @@ HMM$set("public","backwardAlgorithm",function(){
 
 ## Method to compute viterbi path
 HMM$set("public","computeViterbiPath",function(){
-    vPathList=lapply(self$alphaTable,function(x){
-        return(computeViterbiPathCpp(x,self$transition$transitionLogProb))
-    })
+    vPathList=list()
+    for(i in 1:length(self$alphaTable)) {
+        vPathList[[i]]=computeViterbiPathCpp(self$alphaTable[[i]],self$transition$transitionLogProb)
+    }
     return(vPathList)
 })
 
 ## Method to compute marginal probability table
 HMM$set("public","computeMarginalProb",function(){
-    mProb=foreach(i=1:length(self$alphaTable)) %do% {
-        return(computeMarginalProbabilityCpp(self$alphaTable[[i]],self$betaTable[[i]]))
+    mProb=list()
+    for(i in 1:length(self$alphaTable)) {
+        mProb[[i]]=computeMarginalProbabilityCpp(self$alphaTable[[i]],self$betaTable[[i]])
     }
     return(mProb)
-})
+},overwrite=TRUE)
 
 ## Method to compute liklihood from alpha table
 HMM$set("public","computeLogLiklihood",function(){
