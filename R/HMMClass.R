@@ -118,7 +118,7 @@ HMM$set("public","backwardAlgorithm",function(){
 HMM$set("public","computeViterbiPath",function(){
     vPathList=list()
     for(i in 1:length(self$alphaTable)) {
-        vPathList[[i]]=computeViterbiPathCpp(self$alphaTable[[i]],self$transition$transitionLogProb)
+        vPathList[[i]]=computeViterbiPathCpp(self$alphaTable[[i]],self$transition$transitionLogProb)+1
     }
     return(vPathList)
 })
@@ -202,7 +202,7 @@ fitHMM <- function(hmm,nthreads=1,log.file="foo.log",type=c("r","phast")){
     hmm$computeLogLiklihood()
 }
 
-setGeneric("plot.hmm",function(hmm=NULL,viterbi=NULL,marginal=NULL,truePath=NULL,misc=NULL,start=NA_real_,end=NA_real_,chain=1,dat.min=1,data.heatmap=FALSE){ standardGeneric("plot.hmm") })
+methods::setGeneric("plot.hmm",function(hmm=NULL,viterbi=NULL,marginal=NULL,truePath=NULL,misc=NULL,start=NA_real_,end=NA_real_,chain=1,dat.min=1,data.heatmap=FALSE){ standardGeneric("plot.hmm") })
 ## Now some methods to plot HMM
 setMethod("plot.hmm",signature=c(hmm="ANY",viterbi="ANY",marginal="ANY",truePath="ANY",misc="ANY",start="numeric",end="numeric",chain="ANY",dat.min="ANY",data.heatmap="ANY"),
           definition=function(hmm,viterbi=NULL,marginal=NULL,truePath=NULL,misc=NULL,start=NA_real_,end=NA_real_,chain=1,dat.min=1,data.heatmap=FALSE){
