@@ -9,6 +9,7 @@ Description: A flexible package for creating HMMs.
 License: What license is it under?
 Encoding: UTF-8
 LazyData: true
+ByteCompile: true
 LinkingTo: Rcpp
 Imports: 
   Rcpp,
