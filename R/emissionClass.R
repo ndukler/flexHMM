@@ -8,7 +8,7 @@
 ## @nstates defines the number of states in the HMM
 ## @chainReplicates is a 
 
-Emission <- R6::R6Class("Emission",public=list(data=list(),emissionLogProb=list(),nstates=numeric(),chainReplicates=list()),inherit=parameterObject)
+Emission <- R6::R6Class("Emission",public=list(data=list(),emissionLogProb=list(),nstates=numeric(),chainReplicates=list(),hmm=NULL),inherit=parameterObject)
 
 ## Add generic constructor for all emission type objects
 Emission$set("public","initialize",function(data,nstates,params=list(),lowerBound=list(), upperBound=list(),fixed=list(),
@@ -107,5 +107,13 @@ Emission$set("public","checkDataValidity", function(data,chainReplicates){
 
 ## Update log emission probability
 Emission$set("public","updateEmissionProbabilities", function(){
-        stop("Must implement a updateEmissionProbabilities function.")
+    stop("Must implement a updateEmissionProbabilities function.")
+})
+
+## An optional function that allows certain emission updates to always happen, regardless of whether any emission parameters have been updated
+## Really only do this if you have a really weird HMM model where the transition and emission models share some parameters so the HMM
+## class cannot correctly track when to update the appropriate probabilities
+Emission$set("public","forcedEmissionUpdates", function(){
+    ## warning("No forcedEmissionUpdates function set")
+    return(NULL)
 })

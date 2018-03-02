@@ -1,5 +1,5 @@
 ## Set generic transition class
-Transition <- R6::R6Class("Transition",public=list(transitionLogProb=matrix(),nstates=numeric()),inherit=parameterObject)
+Transition <- R6::R6Class("Transition",public=list(transitionLogProb=matrix(),nstates=numeric(),hmm=NULL),inherit=parameterObject)
 
 Transition$set("public","initialize",function(nstates,params=list(),lowerBound=list(), upperBound=list(),fixed=list(),
                                               invariants=list(),chainSpecificParameters=NULL){
@@ -38,4 +38,12 @@ Transition$set("public","checkTransitionValidity", function(){
 ## Updates log transition probabilities
 Transition$set("public","updateTransitionProbabilities", function(){
         stop("Must implement a updateEmissionProbabilities function.")
+})
+
+## An optional function that allows certain transition updates to always happen, regardless of whether any transition parameters have been updated
+## Really only do this if you have a really weird HMM model where the transition and emission models share some parameters so the HMM
+## class cannot correctly track when to update the appropriate probabilities
+Transition$set("public","forcedTransitionUpdates", function(){
+    ## warning("No forcedTransitionUpdates function set")
+    return(NULL)
 })
