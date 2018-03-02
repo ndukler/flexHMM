@@ -1,4 +1,4 @@
-HMM <- R6::R6Class("HMM",public=list(emission="Emission",transition="Transition",logPrior="numeric",alphaTable="list",betaTable="list",logLiklihood="numeric",cluster="cluster"))
+HMM <- R6::R6Class("HMM",public=list(emission="Emission",transition="Transition",logPrior="numeric",alphaTable="list",betaTable="list",logLiklihood="numeric",cluster="cluster",logDir="character"))
 
 ## Check validity of HMM object
 HMM$set("public","checkHMMValidity",function(){
@@ -18,16 +18,19 @@ HMM$set("public","checkHMMValidity",function(){
 })
 
 ## constructor function for HMM object
-HMM$set("public","initialize", function(emission,transition,threads=1){
+HMM$set("public","initialize", function(emission,transition,threads=1,log.dir){
     transition$updateTransitionProbabilities()
     ## Compute the prior distribution of states as the steady state distribution of the transition matrix
     leadingEigenV=eigen(t(exp(transition$transitionLogProb)))$vectors[,1]
     steadyState=as.numeric(log(leadingEigenV/sum(leadingEigenV)))
     ## Set object values
     self$emission=emission
+    self$emission$hmm=self
     self$transition=transition
+    self$transition$hmm=self
     self$logPrior=steadyState
     self$cluster=parallel::makeCluster(threads)
+    self$logDir=log.dir
 },overwrite=TRUE)
 
 ##
@@ -159,6 +162,9 @@ updateAllParams <- function(x,hmmObj){
     if(!sum(hmmObj$transition$fixed)>0 || length(hmmObj$transition$transitionLogProb)==0 ){
         hmmObj$transition$updateTransitionProbabilities()
     }
+    ## Run any additional forced updates to the emission or transition matricies
+    hmmObj$emission$forcedEmissionUpdates()
+    hmmObj$transition$forcedTransitionUpdates()
     ## Run forward algorithm
     hmmObj$forwardAlgorithm()
     hmmObj$computeLogLiklihood()
@@ -167,12 +173,12 @@ updateAllParams <- function(x,hmmObj){
 }
 
 ## Method to fit HMM
-fitHMM <- function(hmm,nthreads=1,log.file="foo.log",type=c("r","phast")){
+fitHMM <- function(hmm,nthreads=1,type=c("r","phast")){
     ## Pass non-fixed parameters for optimization
     if(length(type)==2) type=type[1]
     if(type=="r"){
         tryCatch({
-            sink(file=log.file,append=TRUE)
+            sink(file=file.path(hmm$logDir,"optim_log.txt"),append=TRUE)
             write(paste0(paste0(rep("-",30),collapse=""),"START",paste0(rep("-",30),collapse="")),stdout())
             final.params=optim(fn=updateAllParams, par=c(hmm$emission$params[!hmm$emission$fixed],hmm$transition$params[!hmm$transition$fixed]),
                   lower = c(hmm$emission$lowerBound[!hmm$emission$fixed],hmm$transition$lowerBound[!hmm$transition$fixed]),
@@ -185,6 +191,7 @@ fitHMM <- function(hmm,nthreads=1,log.file="foo.log",type=c("r","phast")){
             sink()
             warning("HMM optimization interrupted by user.")
         }, error = function(e){
+            save(hmm,file=file.path(hmm$logDir,"hmm.bin"))
             sink()
             stop(e)
         })
