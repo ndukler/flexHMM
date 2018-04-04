@@ -194,34 +194,34 @@ parameterObject$set("public","setParamConstraints", function(lowerBound=list(),u
 ## Returns the indicies that a parameter exists in, in the parameter vector
 ## Note: Relies on the construction of the parameter vector where parameters of the same type and chain are contiguous
 parameterObject$set("public","getParamIndicies", function(paramType,chain=NULL,replicate=NULL){
-    ## Check that the parameter type is valid
-    if(is.na(self$paramIndex[paramType]$group[1])){
-        stop(paste("Invalid query for parameter of type",paramType))
-    }
-    ## If a chain was specified (but may be ignored)
-    if(!is.null(chain)){
-        ## If it is not a chain specific parameter
-        if(self$paramIndex[eval(.(paramType))]$chain[1]==-1){
-            chain=-1
-        } else if(is.na(self$paramIndex[eval(.(paramType,chain))]$group[1])){
-            stop("Out of range chain query")
-        }
-    } 
-    ## If a replicate is specified (but may be ignored)
-    if(!is.null(replicate)){
-        ## If it is not a replicate specific parameter
-        if(self$paramIndex[eval(.(paramType,chain))]$replicate[1]==-1){
-            replicate=-1
-        } else if(is.na(self$paramIndex[eval(.(paramType,chain,replicate))]$group[1])){
-            stop("Out of range replicate query")
-        }
-    }
     qOut=self$paramIndex[eval(.(paramType,chain,replicate)),.(start,end)]
-    
-    out=do.call("c",foreach(z=1:nrow(qOut)) %do% {
-        return(qOut$start[z]:qOut$end[z])
-    })
-    return(as.numeric(out))
+    ## If any parameter queries were invalid, check how
+    if(any(is.na(qOut))){
+        if(is.na(self$paramIndex[eval(.(paramType))]$group[1])){
+                stop(paste("Invalid query for parameter of type",paramType))
+            }
+        ## If a chain was specified (but may be ignored)
+        if(!is.null(chain)){
+            ## If it is not a chain specific parameter
+            if(self$paramIndex[eval(.(paramType))]$chain[1]==-1){
+                chain=-1
+                } else if(is.na(self$paramIndex[eval(.(paramType,chain))]$group[1])){
+                    stop("Out of range chain query")
+                }
+        }
+        ## If a replicate is specified (but may be ignored)
+        if(!is.null(replicate)){
+            ## If it is not a replicate specific parameter
+            if(self$paramIndex[eval(.(paramType,chain))]$replicate[1]==-1){
+                replicate=-1
+            } else if(is.na(self$paramIndex[eval(.(paramType,chain,replicate))]$group[1])){
+                stop("Out of range replicate query")
+            }
+            }
+    } else {
+        out=as.numeric(unlist(apply(qOut, 1,function(x) x[1]:x[2])))
+    }
+    return(out)
 })
 
 parameterObject$set("public","getChainParameterList", function(paramType,chain,replicate=NULL){
