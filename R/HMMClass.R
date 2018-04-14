@@ -70,18 +70,32 @@ HMM$set("public","forwardAlgorithm", function(){
     ## Create variables to reference transition prob and prior so they can be passed to parallel environment without R6 object
     transition=self$transition$transitionLogProb
     prior=self$logPrior
-    ## Register parallel environment
-    doParallel::registerDoParallel(cl=self$cluster)
     ## If matrix is more than 50% sparse use sparse
     if(length(permTransV) <= 0.5 * self$emission$nstates^2){
         tLen=unlist(lapply(permTrans,length),use.names=FALSE)
-        ## Compute forward table in parallel for each chain
-        self$alphaTable=foreach(x=emisi, .noexport=c("self")) %dopar% {
-            return(forwardAlgorithmSparseCpp(x,transition,prior,permTransV,tLen))
+        if(length(thmm$cluster)>1){
+            ## Register parallel environment
+            doParallel::registerDoParallel(cl=self$cluster)
+            ## Compute forward table in parallel for each chain
+            self$alphaTable=foreach(x=emisi, .noexport=c("self")) %dopar% {
+                return(forwardAlgorithmSparseCpp(x,transition,prior,permTransV,tLen))
+            }
+        } else {
+            self$alphaTable=foreach(x=emisi, .noexport=c("self")) %do% {
+                return(forwardAlgorithmSparseCpp(x,transition,prior,permTransV,tLen))
+            }
         }
     } else {
-        self$alphaTable=foreach(x=emisi, .noexport=c("self")) %dopar% {
-            return(forwardAlgorithmCpp(x,transition,prior))        
+        if(length(thmm$cluster)>1){
+            ## Register parallel environment
+            doParallel::registerDoParallel(cl=self$cluster)
+            self$alphaTable=foreach(x=emisi, .noexport=c("self")) %dopar% {
+                return(forwardAlgorithmCpp(x,transition,prior))        
+            }
+        } else {
+            self$alphaTable=foreach(x=emisi, .noexport=c("self")) %do% {
+                return(forwardAlgorithmCpp(x,transition,prior))        
+            }
         }
     }
     ## Reset to sequential backend
@@ -99,18 +113,32 @@ HMM$set("public","backwardAlgorithm",function(){
     ## Create variables to reference transition prob and prior so they can be passed to parallel environment without R6 object
     transition=self$transition$transitionLogProb
     prior=self$logPrior
-    ## Register parallel environment if necessary
-    doParallel::registerDoParallel(cl=self$cluster)
     ## If matrix is more than 50% sparse use sparse
     if(length(permTransV) <= 0.5 * self$emission$nstates^2){
         tLen=unlist(lapply(permTrans,length),use.names=FALSE)
-        ## Compute forward table in parallel for each chain
-        self$betaTable=foreach(x=emisi, .noexport=c("self")) %dopar% {
-            return(backwardAlgorithmSparseCpp(x,transition,permTransV,tLen))
+        if(length(thmm$cluster)>1){
+            ## Register parallel environment if necessary
+            doParallel::registerDoParallel(cl=self$cluster)
+            ## Compute forward table in parallel for each chain
+            self$betaTable=foreach(x=emisi, .noexport=c("self")) %dopar% {
+                return(backwardAlgorithmSparseCpp(x,transition,permTransV,tLen))
+            }
+        } else {
+            self$betaTable=foreach(x=emisi, .noexport=c("self")) %do% {
+                return(backwardAlgorithmSparseCpp(x,transition,permTransV,tLen))
+            }
         }
     } else {
-        self$betaTable=foreach(x=emisi, .noexport=c("self")) %dopar% {
-            return(forwardAlgorithmCpp(x,transition))        
+        if(length(thmm$cluster)>1){
+            ## Register parallel environment if necessary
+            doParallel::registerDoParallel(cl=self$cluster)
+            self$betaTable=foreach(x=emisi, .noexport=c("self")) %dopar% {
+                return(forwardAlgorithmCpp(x,transition))        
+            }
+        } else {
+            self$betaTable=foreach(x=emisi, .noexport=c("self")) %do% {
+                return(forwardAlgorithmCpp(x,transition))        
+            }
         }
     }
     ## Reset to sequential backend
@@ -155,16 +183,19 @@ updateAllParams <- function(x,hmmObj){
     ## Take in parameters
     hmmObj$emission$params[!hmmObj$emission$fixed]=x[1:sum(!hmmObj$emission$fixed)]
     hmmObj$transition$params[!hmmObj$transition$fixed]=x[1:sum(!hmmObj$transition$fixed)+sum(!hmmObj$emission$fixed)]
+
     ## Update emission and transition probabilities
-    if(!sum(hmmObj$emission$fixed)>0 || length(hmmObj$emission$emissionLogProb)==0){
+    if(any(!hmmObj$emission$fixed) || length(hmmObj$emission$emissionLogProb)==0){
         hmmObj$emission$updateEmissionProbabilities()
     }
-    if(!sum(hmmObj$transition$fixed)>0 || length(hmmObj$transition$transitionLogProb)==0 ){
-        hmmObj$transition$updateTransitionProbabilities()
+    if(any(!hmmObj$transition$fixed) || length(hmmObj$transition$transitionLogProb)==0 ){
+        hmmObj$transition$updateTransitionProbabilities()        
     }
     ## Run any additional forced updates to the emission or transition matricies
     hmmObj$emission$forcedEmissionUpdates()
     hmmObj$transition$forcedTransitionUpdates()
+    ## Update prior
+    hmmObj$transition$updatePrior()
     ## Run forward algorithm
     hmmObj$forwardAlgorithm()
     hmmObj$computeLogLiklihood()
@@ -173,9 +204,9 @@ updateAllParams <- function(x,hmmObj){
 }
 
 ## Method to fit HMM
-fitHMM <- function(hmm,nthreads=1,type=c("r","phast")){
+fitHMM <- function(hmm,nthreads=1,type=c("r","phast","brent")){
     ## Pass non-fixed parameters for optimization
-    if(length(type)==2) type=type[1]
+    if(length(type)==3) type=type[1]
     if(type=="r"){
         tryCatch({
             sink(file=file.path(hmm$logDir,"optim_log.txt"),append=TRUE)
@@ -200,12 +231,44 @@ fitHMM <- function(hmm,nthreads=1,type=c("r","phast")){
                              lower = c(hmm$emission$lowerBound[!hmm$emission$fixed],hmm$transition$lowerBound[!hmm$transition$fixed]),
                              upper = c(hmm$emission$upperBound[!hmm$emission$fixed],hmm$transition$upperBound[!hmm$transition$fixed]),
                              logfile=log.file,hmmObj=hmm)
-    } else {
+    } else if(type=="brent"){
+        tryCatch({
+            sink(file=file.path(hmm$logDir,"optim_log.txt"),append=TRUE)
+            write(paste0(paste0(rep("-",30),collapse=""),"START",paste0(rep("-",30),collapse="")),stdout())
+            final.params=optim(fn=updateAllParams, par=c(hmm$emission$params[!hmm$emission$fixed],hmm$transition$params[!hmm$transition$fixed]),
+                lower = c(hmm$emission$lowerBound[!hmm$emission$fixed],hmm$transition$lowerBound[!hmm$transition$fixed]),
+                upper = c(hmm$emission$upperBound[!hmm$emission$fixed],hmm$transition$upperBound[!hmm$transition$fixed]),
+                hmmObj=hmm,method="Brent",control=list(trace=6,fnscale=-1,factr=1e10,REPORT=1))
+            write(paste0(paste0(rep("-",30),collapse=""),"END",paste0(rep("-",30),collapse="")),stdout())
+            sink()
+        }, interrupt=function(i){            
+            write(paste0(paste0(rep("-",30),collapse=""),"USER TERMINATED",paste0(rep("-",30),collapse="")),stdout())
+            sink()
+            warning("HMM optimization interrupted by user.")
+        }, error = function(e){
+            save(hmm,file=file.path(hmm$logDir,"hmm.bin"))
+            sink()
+            stop(e)
+        })
+    }else {
         stop("Invalid optimizer")
     }
     ## Update hmm to use final parameters and update logLiklihood
-    hmm$emission$params[!hmm$emission$fixed]=final.params$par[1:sum(!hmm$emission$fixed)]
-    hmm$transition$params[!hmm$transition$fixed]=final.params$par[1:sum(!hmm$transition$fixed)+sum(!hmm$emission$fixed)]
+    if(sum(!hmm$emission$fixed)>0){
+        hmm$emission$params[!hmm$emission$fixed]=final.params$par[1:sum(!hmm$emission$fixed)]
+        hmm$emission$updateEmissionProbabilities()
+    }
+    if(sum(!hmm$transition$fixed)>0){
+        hmm$transition$params[!hmm$transition$fixed]=final.params$par[1:sum(!hmm$transition$fixed)+sum(!hmm$emission$fixed)]
+        hmm$transition$forcedTransitionUpdates()
+    }
+    ## Run any additional forced updates to the emission or transition matricies
+    hmm$emission$forcedEmissionUpdates()
+    hmm$transition$forcedTransitionUpdates()
+    hmm$transition$updatePrior()
+    ## Run forward algorithm
+    hmm$forwardAlgorithm()
+    ## Compute log-likelihood
     hmm$computeLogLiklihood()
 }
 

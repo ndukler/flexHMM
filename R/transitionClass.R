@@ -40,6 +40,16 @@ Transition$set("public","updateTransitionProbabilities", function(){
         stop("Must implement a updateEmissionProbabilities function.")
 })
 
+
+## Update logPrior
+Transition$set("public","updatePrior", function(){
+    ## Compute the prior distribution of states as the steady state distribution of the transition matrix
+    leadingEigenV=eigen(t(exp(self$transitionLogProb)))$vectors[,1]
+    steadyState=as.numeric(log(leadingEigenV/sum(leadingEigenV)))
+    self$hmm$logPrior=steadyState
+},overwrite=TRUE)
+
+
 ## An optional function that allows certain transition updates to always happen, regardless of whether any transition parameters have been updated
 ## Really only do this if you have a really weird HMM model where the transition and emission models share some parameters so the HMM
 ## class cannot correctly track when to update the appropriate probabilities
