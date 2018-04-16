@@ -73,7 +73,7 @@ HMM$set("public","forwardAlgorithm", function(){
     ## If matrix is more than 50% sparse use sparse
     if(length(permTransV) <= 0.5 * self$emission$nstates^2){
         tLen=unlist(lapply(permTrans,length),use.names=FALSE)
-        if(length(thmm$cluster)>1){
+        if(length(self$cluster)>1){
             ## Register parallel environment
             doParallel::registerDoParallel(cl=self$cluster)
             ## Compute forward table in parallel for each chain
@@ -86,7 +86,7 @@ HMM$set("public","forwardAlgorithm", function(){
             }
         }
     } else {
-        if(length(thmm$cluster)>1){
+        if(length(self$cluster)>1){
             ## Register parallel environment
             doParallel::registerDoParallel(cl=self$cluster)
             self$alphaTable=foreach(x=emisi, .noexport=c("self")) %dopar% {
@@ -116,7 +116,7 @@ HMM$set("public","backwardAlgorithm",function(){
     ## If matrix is more than 50% sparse use sparse
     if(length(permTransV) <= 0.5 * self$emission$nstates^2){
         tLen=unlist(lapply(permTrans,length),use.names=FALSE)
-        if(length(thmm$cluster)>1){
+        if(length(self$cluster)>1){
             ## Register parallel environment if necessary
             doParallel::registerDoParallel(cl=self$cluster)
             ## Compute forward table in parallel for each chain
@@ -129,7 +129,7 @@ HMM$set("public","backwardAlgorithm",function(){
             }
         }
     } else {
-        if(length(thmm$cluster)>1){
+        if(length(self$cluster)>1){
             ## Register parallel environment if necessary
             doParallel::registerDoParallel(cl=self$cluster)
             self$betaTable=foreach(x=emisi, .noexport=c("self")) %dopar% {
@@ -186,9 +186,11 @@ updateAllParams <- function(x,hmmObj){
 
     ## Update emission and transition probabilities
     if(any(!hmmObj$emission$fixed) || length(hmmObj$emission$emissionLogProb)==0){
+        write("Updating emission probabilitites",stdout())
         hmmObj$emission$updateEmissionProbabilities()
     }
     if(any(!hmmObj$transition$fixed) || length(hmmObj$transition$transitionLogProb)==0 ){
+        write("Updating transition probabilities",stdout())
         hmmObj$transition$updateTransitionProbabilities()        
     }
     ## Run any additional forced updates to the emission or transition matricies

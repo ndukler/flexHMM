@@ -194,33 +194,26 @@ parameterObject$set("public","setParamConstraints", function(lowerBound=list(),u
 ## Returns the indicies that a parameter exists in, in the parameter vector
 ## Note: Relies on the construction of the parameter vector where parameters of the same type and chain are contiguous
 parameterObject$set("public","getParamIndicies", function(paramType,chain=NULL,replicate=NULL){
-    qOut=self$paramIndex[eval(.(paramType,chain,replicate)),.(start,end)]
-    ## If any parameter queries were invalid, check how
-    if(any(is.na(qOut))){
-        if(is.na(self$paramIndex[eval(.(paramType))]$group[1])){
-                stop(paste("Invalid query for parameter of type",paramType))
-            }
-        ## If a chain was specified (but may be ignored)
-        if(!is.null(chain)){
-            ## If it is not a chain specific parameter
-            if(self$paramIndex[eval(.(paramType))]$chain[1]==-1){
-                chain=-1
-                } else if(is.na(self$paramIndex[eval(.(paramType,chain))]$group[1])){
-                    stop("Out of range chain query")
-                }
-        }
-        ## If a replicate is specified (but may be ignored)
-        if(!is.null(replicate)){
-            ## If it is not a replicate specific parameter
-            if(self$paramIndex[eval(.(paramType,chain))]$replicate[1]==-1){
-                replicate=-1
-            } else if(is.na(self$paramIndex[eval(.(paramType,chain,replicate))]$group[1])){
-                stop("Out of range replicate query")
-            }
-            }
-    } else {
-        out=as.numeric(unlist(apply(qOut, 1,function(x) x[1]:x[2])))
+    ## Set defaults with logic so that else statement even invoked if chain is NULL or -1
+    if(is.null(chain)) chain = -1 
+    if(is.null(replicate)) replicate = -1
+    
+    ## Do first query
+    qOut <- self$paramIndex[eval(.(paramType, chain, replicate)),.(start,end),nomatch=0]
+    
+    ## Diagnose query failures
+    if (nrow(qOut)==0) {
+        if (!all(paramType %in% .subset2(self$paramIndex[eval(J(paramType)), mult="first", nomatch=0],"paramType"))) {
+            stop(paste("Invalid query for parameter of type", paramType))
+        } else if (!all(chain %in% .subset2(self$paramIndex[eval(J(paramType,chain)), mult="first", nomatch=0], "chain"))) {
+            stop("Out of range chain query or no chain specific instance of that parameter exists")
+        } else if (!all(replicate %in% .subset2(self$paramIndex[eval(J(paramType,chain,replicate)), mult="first", nomatch=0], "replicate"))) {
+            stop("Out of range replicate query or no replicate specific instance of that parameter exists")
+        }    
     }
+    
+    ## Return index range
+    out = as.numeric(unlist(apply(qOut, 1, function(x)  x[1]:x[2])))
     return(out)
 })
 
