@@ -1,4 +1,4 @@
-HMM <- R6::R6Class("HMM",public=list(emission="Emission",transition="Transition",logPrior="numeric",alphaTable="list",betaTable="list",logLiklihood="numeric",cluster="cluster",logDir="character"))
+HMM <- R6::R6Class("HMM",public=list(emission="Emission",transition="Transition",logPrior="numeric",alphaTable="list",betaTable="list",logLiklihood="numeric",cluster="cluster",logDir="character",convergence="numeric"))
 
 ## Check validity of HMM object
 HMM$set("public","checkHMMValidity",function(){
@@ -31,6 +31,7 @@ HMM$set("public","initialize", function(emission,transition,threads=1,log.dir){
     self$logPrior=steadyState
     self$cluster=parallel::makeCluster(threads)
     self$logDir=log.dir
+    self$convergence=-1
 },overwrite=TRUE)
 
 ##
@@ -182,10 +183,13 @@ updateAllParams <- function(x,hmmObj,scale=1){
         stop("Length of x does not match the number of expected parameters")
     }
     fp=file.path(hmmObj$logDir,"parameterUpdateTimer.txt")
+
     ## Take in parameters
     hmmObj$emission$params[!hmmObj$emission$fixed]=x[1:sum(!hmmObj$emission$fixed)]
     hmmObj$transition$params[!hmmObj$transition$fixed]=x[1:sum(!hmmObj$transition$fixed)+sum(!hmmObj$emission$fixed)]
 
+    write(paste("Parameters:", paste(x, collapse="  ")),file=fp,append=TRUE)
+    
     ## Update emission and transition probabilities
     if(any(!hmmObj$emission$fixed) || length(hmmObj$emission$emissionLogProb)==0){
         write("Updating emission probabilitites",file=fp,append=TRUE)
@@ -203,6 +207,7 @@ updateAllParams <- function(x,hmmObj,scale=1){
         write(paste("Elapsed time (ms):",(end_time - start_time)*1000),file=fp,append=TRUE)
         total.time=total.time+(end_time - start_time)
     }
+
     ## Run forced updates to the emission probabilities
     write("Forced emission probability updates",file=fp,append=TRUE)
     start_time <- Sys.time()
@@ -210,6 +215,7 @@ updateAllParams <- function(x,hmmObj,scale=1){
     end_time <- Sys.time()
     write(paste("Elapsed time (ms):",(end_time - start_time)*1000),file=fp,append=TRUE)
     total.time=total.time+(end_time - start_time)
+
     ## Run forced updates to transition probabilities
     write("Forced transition probability updates",file=fp,append=TRUE)
     start_time <- Sys.time()
@@ -217,8 +223,14 @@ updateAllParams <- function(x,hmmObj,scale=1){
     end_time <- Sys.time()
     write(paste("Elapsed time (ms):",(end_time - start_time)*1000),file=fp,append=TRUE)
     total.time=total.time+(end_time - start_time)
+
     ## Update prior
+    write(" Prior",file=fp,append=TRUE)
+    start_time <- Sys.time()
     hmmObj$transition$updatePrior()
+    end_time <- Sys.time()
+    write(paste("Elapsed time (ms):",(end_time - start_time)*1000),file=fp,append=TRUE)
+
     ## Run forward algorithm
     write("Forward algorithm",file=fp,append=TRUE)
     start_time <- Sys.time()
@@ -226,6 +238,7 @@ updateAllParams <- function(x,hmmObj,scale=1){
     end_time <- Sys.time()
     write(paste("Elapsed time (ms):",(end_time - start_time)*1000),file=fp,append=TRUE)
     total.time=total.time+(end_time - start_time)
+
     ## Compute log-likelihood
     write("Computing log-likelihood",file=fp,append=TRUE)
     start_time <- Sys.time()
@@ -234,6 +247,10 @@ updateAllParams <- function(x,hmmObj,scale=1){
     write(paste("Elapsed time (ms):",(end_time - start_time)*1000),file=fp,append=TRUE)
     total.time=total.time+(end_time - start_time)
 
+    ## Print out parameters and function value 
+    write(paste("Value:",hmmObj$logLiklihood*scale),file=fp,append=TRUE)
+
+    ## Print out total elapsed time    
     write(paste("\n Total elapsed time (ms):",total.time*1000),file=fp,append=TRUE)
     write("-------------------------------------------------------",file=fp,append=TRUE)
     return(hmmObj$logLiklihood*scale)
@@ -243,7 +260,7 @@ updateAllParams <- function(x,hmmObj,scale=1){
 fitHMM <- function(hmm,nthreads=1,type=c("r","phast","brent")){
     ## Clear the parameter update watcher for this round
     fp=file.path(hmm$logDir,"parameterUpdateTimer.txt")
-    write("***Beginning optimization***\n", file=fp)
+    write("***Beginning optimization***\n", file=fp,append=TRUE)
     ## Pass non-fixed parameters for optimization
     if(length(type)==3) type=type[1]
     if(type=="r"){
@@ -278,6 +295,7 @@ fitHMM <- function(hmm,nthreads=1,type=c("r","phast","brent")){
                 lower = c(hmm$emission$lowerBound[!hmm$emission$fixed],hmm$transition$lowerBound[!hmm$transition$fixed]),
                 upper = c(hmm$emission$upperBound[!hmm$emission$fixed],hmm$transition$upperBound[!hmm$transition$fixed]),
                 hmmObj=hmm,method="Brent",control=list(trace=6,fnscale=-1,factr=1e10,REPORT=1))
+            hmm$convergence=final.params$convergence
             write(paste0(paste0(rep("-",30),collapse=""),"END",paste0(rep("-",30),collapse="")),stdout())
             sink()
         }, interrupt=function(i){            
