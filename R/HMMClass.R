@@ -1,4 +1,4 @@
-HMM <- R6::R6Class("HMM",public=list(emission="Emission",transition="Transition",logPrior="numeric",alphaTable="list",betaTable="list",logLiklihood="numeric",cluster="cluster",logDir="character",convergence="numeric"))
+HMM <- R6::R6Class("HMM",public=list(emission="Emission",transition="Transition",logPrior="list",alphaTable="list",betaTable="list",logLiklihood="numeric",cluster="cluster",logDir="character",convergence="numeric"))
 
 ## Check validity of HMM object
 HMM$set("public","checkHMMValidity",function(){
@@ -257,10 +257,12 @@ updateAllParams <- function(x,hmmObj,scale=1){
 }
 
 ## Method to fit HMM
-fitHMM <- function(hmm,nthreads=1,type=c("r","phast","brent")){
+fitHMM <- function(hmm,nthreads=1,type=c("r","phast","brent"),scale=1,step.size=10^-7){
     ## Clear the parameter update watcher for this round
     fp=file.path(hmm$logDir,"parameterUpdateTimer.txt")
     write("***Beginning optimization***\n", file=fp,append=TRUE)
+    stpsz=rep(step.size,sum(c(!hmm$emission$fixed,!hmm$transition$fixed)))
+    write(paste("Using finite difference of",step.size,"to approximate the gradient\n"), file=fp,append=TRUE)
     ## Pass non-fixed parameters for optimization
     if(length(type)==3) type=type[1]
     if(type=="r"){
@@ -270,7 +272,7 @@ fitHMM <- function(hmm,nthreads=1,type=c("r","phast","brent")){
             final.params=optim(fn=updateAllParams, par=c(hmm$emission$params[!hmm$emission$fixed],hmm$transition$params[!hmm$transition$fixed]),
                   lower = c(hmm$emission$lowerBound[!hmm$emission$fixed],hmm$transition$lowerBound[!hmm$transition$fixed]),
                   upper = c(hmm$emission$upperBound[!hmm$emission$fixed],hmm$transition$upperBound[!hmm$transition$fixed]),
-                  hmmObj=hmm,method="L-BFGS-B",control=list(trace=6,fnscale=-1,factr=1e10,REPORT=1))
+                  hmmObj=hmm,method="L-BFGS-B",control=list(trace=6,fnscale=1,factr=1e10,REPORT=1,ndeps=stpsz),scale=scale)
             write(paste0(paste0(rep("-",30),collapse=""),"END",paste0(rep("-",30),collapse="")),stdout())
             sink()
         }, interrupt=function(i){            
@@ -294,7 +296,7 @@ fitHMM <- function(hmm,nthreads=1,type=c("r","phast","brent")){
             final.params=optim(fn=updateAllParams, par=c(hmm$emission$params[!hmm$emission$fixed],hmm$transition$params[!hmm$transition$fixed]),
                 lower = c(hmm$emission$lowerBound[!hmm$emission$fixed],hmm$transition$lowerBound[!hmm$transition$fixed]),
                 upper = c(hmm$emission$upperBound[!hmm$emission$fixed],hmm$transition$upperBound[!hmm$transition$fixed]),
-                hmmObj=hmm,method="Brent",control=list(trace=6,fnscale=-1,factr=1e10,REPORT=1))
+                hmmObj=hmm,method="Brent",control=list(trace=6,factr=1e10,REPORT=1,,ndeps=stpsz),scale=scale)
             hmm$convergence=final.params$convergence
             write(paste0(paste0(rep("-",30),collapse=""),"END",paste0(rep("-",30),collapse="")),stdout())
             sink()
@@ -304,6 +306,7 @@ fitHMM <- function(hmm,nthreads=1,type=c("r","phast","brent")){
             warning("HMM optimization interrupted by user.")
         }, error = function(e){
             save(hmm,file=file.path(hmm$logDir,"hmm.bin"))
+
             sink()
             stop(e)
         })
